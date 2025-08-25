@@ -1,0 +1,41 @@
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer or Players.PlayerAdded:Wait()
+
+-- Track Loaded Scripts
+local scriptExecuted = false
+local loadedScripts = {}
+local function loadScript(url)
+    if loadedScripts[url] then return end
+    loadedScripts[url] = true
+    local success, result = pcall(function()
+        return loadstring(game:HttpGet(url, true))()
+    end)
+    if not success then
+        warn("[Failed to load]:", url, result)
+    end
+end
+
+-- Check for special place IDs first
+local pid = game.PlaceId
+local specialPlaceIds = {
+    [109983668079237] = true,
+    [128762245270197] = true,
+    [96342491571673] = true
+}
+
+if specialPlaceIds[pid] then
+    local success1, result1 = pcall(function()
+        loadScript("https://gist.githubusercontent.com/UCT-hub/0fd2f8d2fd66882d0f81bd02af9bbdc3/raw/2cdb639b53b455d0192eef961e81d1c4f0a29620/UCTHUB")
+    end)
+    local success2, result2 = pcall(function()
+        loadScript("https://gist.githubusercontent.com/UCT-hub/e2cc5514ebf4f97e8e3bf3ac08b8d862/raw/3c5d4203f927c3ea16215e2c9479eba5fe19fdbc/gistfile1.txt")
+    end)
+    
+    if not success1 then
+        warn("Failed to load Stel script:", result1)
+    end
+    if not success2 then
+        warn("Failed to load Warger script:", result2)
+    end
+    return
+end

@@ -28,6 +28,7 @@ local function createWindow()
     local espEnabled = false
     local espLoop = nil
     local correctAllEnabled = false
+    local noJumpCooldownEnabled = false
     local originalProps = {}  -- [part] = {Color=..., Material=..., CanCollide=...}
     local EspToggle = nil -- Reference to ESP toggle
     local CorrectAllToggle = nil -- Reference to Correct All toggle
@@ -79,7 +80,7 @@ local function createWindow()
         espLoop = task.spawn(function()
             while espEnabled do
                 applyESPOnce()
-                task.wait(0.1) -- More instant update
+                task.wait(0.1) -- Fast update for dynamic crystals
             end
         end)
     end
@@ -124,6 +125,27 @@ local function createWindow()
         end
     end
 
+    -- ========= NO JUMP COOLDOWN =========
+    local jumpConnection = nil
+    local function toggleNoJumpCooldown(v)
+        noJumpCooldownEnabled = v
+        if v then
+            jumpConnection = UserInputService.JumpRequest:Connect(function()
+                local char = LocalPlayer.Character
+                if char and char:FindFirstChild("Humanoid") then
+                    local humanoid = char.Humanoid
+                    humanoid.Jump = true -- Force jump
+                    humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, true) -- Ensure jumping is enabled
+                end
+            end)
+        else
+            if jumpConnection then
+                jumpConnection:Disconnect()
+                jumpConnection = nil
+            end
+        end
+    end
+
     -- ========= MOVEMENT (persists on respawn) =========
     local savedWalkSpeed = 16
     local savedJumpPower = 50
@@ -132,6 +154,9 @@ local function createWindow()
         local hum = char:WaitForChild("Humanoid")
         hum.WalkSpeed = savedWalkSpeed
         hum.JumpPower = savedJumpPower
+        if noJumpCooldownEnabled then
+            hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
+        end
     end
 
     LocalPlayer.CharacterAdded:Connect(applyMovementTo)
@@ -339,6 +364,14 @@ local function createWindow()
             end
         end,
     })
+    TabMain:CreateToggle({
+        Name = "No Jump Cooldown",
+        CurrentValue = false,
+        Flag = "No_Jump_Cooldown",
+        Callback = function(v)
+            toggleNoJumpCooldown(v)
+        end,
+    })
     TabMain:CreateButton({
         Name = "Infinity Yield",
         Callback = function()
@@ -348,7 +381,7 @@ local function createWindow()
     TabMain:CreateLabel("Infinity Yield loads an external script with additional features.")
 
     TabMain:CreateSection("Configuration")
-    TabMain:CreateLabel("Configurations save automatically on changes.")
+    TabMain:CreateLabel("Timer position saves automatically. Other settings save manually in-game.")
 
     -- ================= TAB: TELEPORTS =================
     local TabTP = Window:CreateTab("Teleports", "map-pin")

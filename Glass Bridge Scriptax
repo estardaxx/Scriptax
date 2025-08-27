@@ -22,8 +22,8 @@ local function removeAntiCheat()
         { path = workspace, name = "Anti-Fly" },
         { path = workspace, index = 25 }, -- Kept as index per your request
         { path = workspace, name = "Part" },
-        { path = workspace:FindFirstChild("StardewNova"), name = "Anti-Speed Script" },
-        { path = workspace:FindFirstChild("StardewNova"), name = "Anti-SuperJump Script" },
+        { path = LocalPlayer.PlayerScripts, name = "Anti-Speed Script" }, -- Changed to PlayerScripts
+        { path = LocalPlayer.PlayerScripts, name = "Anti-SuperJump Script" }, -- Changed to PlayerScripts
         { path = LocalPlayer.PlayerScripts, name = "Anti-Fly" },
         { path = LocalPlayer.PlayerScripts, name = "PlayerScriptsLoader" },
         { path = LocalPlayer.PlayerScripts, name = "antiflyhacks" }

@@ -151,11 +151,13 @@ local function createWindow()
     local savedJumpPower = 50
 
     local function applyMovementTo(char)
-        local hum = char:WaitForChild("Humanoid")
-        hum.WalkSpeed = savedWalkSpeed
-        hum.JumpPower = savedJumpPower
-        if noJumpCooldownEnabled then
-            hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
+        local hum = char:WaitForChild("Humanoid", 5) -- Wait for Humanoid with timeout
+        if hum then
+            hum.WalkSpeed = savedWalkSpeed
+            hum.JumpPower = savedJumpPower
+            if noJumpCooldownEnabled then
+                hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
+            end
         end
     end
 
@@ -189,121 +191,6 @@ local function createWindow()
         farmLoop = nil
     end
 
-    -- ========= COUNTER GUI =========
-    local counterEnabled = false
-    local CounterGui = nil
-    local CounterLabel = nil
-    local contador = game.Workspace["Glass bridge"].Timer.SurfaceGui.ClockTimer
-    local positionFile = "ScriptaxConfig/Default_position.json"
-
-    local function savePosition(frame)
-        if isfile and writefile then
-            local pos = { x = frame.Position.X.Offset, y = frame.Position.Y.Offset }
-            writefile(positionFile, HttpService:JSONEncode(pos))
-        end
-    end
-
-    local function loadPosition(frame)
-        if isfile and readfile then
-            if isfile(positionFile) then
-                local pos = HttpService:JSONDecode(readfile(positionFile))
-                frame.Position = UDim2.new(0.5, pos.x, 0, pos.y + 10) -- Adjust for top
-            end
-        end
-    end
-
-    local function makeDraggable(frame)
-        local dragging = false
-        local dragInput, dragStart, startPos
-
-        frame.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                dragging = true
-                dragStart = input.Position
-                startPos = frame.Position
-            end
-        end)
-
-        frame.InputChanged:Connect(function(input)
-            if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-                dragInput = input
-            end
-        end)
-
-        UserInputService.InputChanged:Connect(function(input)
-            if input == dragInput and dragging then
-                local delta = input.Position - dragStart
-                frame.Position = UDim2.new(
-                    startPos.X.Scale,
-                    startPos.X.Offset + delta.X,
-                    startPos.Y.Scale,
-                    startPos.Y.Offset + delta.Y
-                )
-                savePosition(frame) -- Save on drag
-            end
-        end)
-
-        frame.InputEnded:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                dragging = false
-            end
-        end)
-    end
-
-    local function toggleCounter(v)
-        counterEnabled = v
-        if v then
-            -- Create ScreenGui
-            CounterGui = Instance.new("ScreenGui")
-            CounterGui.Parent = LocalPlayer.PlayerGui
-            CounterGui.Name = "TimerGui"
-            CounterGui.ResetOnSpawn = false
-
-            -- Create Frame (background)
-            local frame = Instance.new("Frame")
-            frame.Size = UDim2.new(0, 100, 0, 30)
-            frame.Position = UDim2.new(0.5, -50, 0, 10) -- Top center default
-            frame.BackgroundColor3 = Color3.new(1, 1, 1) -- White
-            frame.BorderSizePixel = 0
-            frame.Parent = CounterGui
-
-            -- Soft borders
-            local corner = Instance.new("UICorner")
-            corner.CornerRadius = UDim.new(0, 5)
-            corner.Parent = frame
-
-            -- Create TextLabel
-            CounterLabel = Instance.new("TextLabel")
-            CounterLabel.Size = UDim2.new(1, 0, 1, 0)
-            CounterLabel.BackgroundTransparency = 1
-            CounterLabel.Text = contador.Text
-            CounterLabel.TextColor3 = Color3.new(0, 0, 0) -- Black
-            CounterLabel.TextScaled = true
-            CounterLabel.Font = Enum.Font.SourceSansBold
-            CounterLabel.Parent = frame
-
-            -- Load saved position
-            loadPosition(frame)
-
-            -- Make it draggable
-            makeDraggable(frame)
-
-            -- Update label when contador changes
-            contador:GetPropertyChangedSignal("Text"):Connect(function()
-                if counterEnabled and CounterLabel then
-                    CounterLabel.Text = contador.Text
-                end
-            end)
-        else
-            if CounterGui then
-                savePosition(CounterGui:FindFirstChild("Frame")) -- Save before destroy
-                CounterGui:Destroy()
-                CounterGui = nil
-                CounterLabel = nil
-            end
-        end
-    end
-
     -- =================== TAB: MAIN ===================
     local TabMain = Window:CreateTab("Main", "layers")
     TabMain:CreateSection("ESP")
@@ -322,16 +209,6 @@ local function createWindow()
         Flag = "Correct_All",
         Callback = function(v)
             toggleCorrectAll(v)
-        end,
-    })
-
-    TabMain:CreateSection("Timer")
-    TabMain:CreateToggle({
-        Name = "Timer",
-        CurrentValue = false,
-        Flag = "Timer",
-        Callback = function(v)
-            toggleCounter(v)
         end,
     })
 
@@ -381,7 +258,7 @@ local function createWindow()
     TabMain:CreateLabel("Infinity Yield loads an external script with additional features.")
 
     TabMain:CreateSection("Configuration")
-    TabMain:CreateLabel("Timer position saves automatically. Other settings save manually in-game.")
+    TabMain:CreateLabel("Settings save manually in-game.")
 
     -- ================= TAB: TELEPORTS =================
     local TabTP = Window:CreateTab("Teleports", "map-pin")
@@ -440,10 +317,10 @@ local function createWindow()
     TabKeys:CreateLabel("Press G to open/close the menu")
 
     -- ================== CREDITS ==================
-    local TabKeys = Window:CreateTab("Credits", "award")
-    TabKeys:CreateSection("Script Information")
-    TabKeys:CreateLabel("Crystal ESP Menu | Made by Estardax ⚡")
-    TabKeys:CreateLabel("UI powered by Rayfield Library")
+    local TabCredits = Window:CreateTab("Credits", "award")
+    TabCredits:CreateSection("Script Information")
+    TabCredits:CreateLabel("Crystal ESP Menu | Made by Estardax ⚡")
+    TabCredits:CreateLabel("UI powered by Rayfield Library")
 
     return Window
 end

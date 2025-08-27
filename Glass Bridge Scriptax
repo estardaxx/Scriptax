@@ -1,5 +1,5 @@
 -- Load Rayfield from the provided source
-local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/SiriusSoftwareLtd/Rayfield/main/source.lua'))()
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 -- Show decorative notification on script start
 if Rayfield and Rayfield.Notifications then

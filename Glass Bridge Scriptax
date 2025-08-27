@@ -11,37 +11,47 @@ local RunService = game:GetService("RunService")
 -- Notification cooldown
 local lastNotificationTime = 0
 local notificationCooldown = 5 -- Seconds
+local initialNotificationShown = false
 
 -- Function to remove anti-cheat scripts and objects
 local function removeAntiCheat()
     local antiCheatItems = {
-        workspace:FindFirstChild("Anti-Fly"),
-        workspace:GetChildren()[25],
-        workspace:FindFirstChild("Part"),
-        workspace:FindFirstChild("StardewNova") and workspace.StardewNova:FindFirstChild("Anti-Speed Script"),
-        workspace:FindFirstChild("StardewNova") and workspace.StardewNova:FindFirstChild("Anti-SuperJump Script"),
-        LocalPlayer.PlayerScripts:FindFirstChild("Anti-Fly"),
-        LocalPlayer.PlayerScripts:FindFirstChild("PlayerScriptsLoader"),
-        LocalPlayer.PlayerScripts:FindFirstChild("antiflyhacks")
+        { path = workspace, name = "Anti-Fly" },
+        { path = workspace, index = 25 }, -- Kept as index per your request
+        { path = workspace, name = "Part" },
+        { path = workspace:FindFirstChild("StardewNova"), name = "Anti-Speed Script" },
+        { path = workspace:FindFirstChild("StardewNova"), name = "Anti-SuperJump Script" },
+        { path = LocalPlayer.PlayerScripts, name = "Anti-Fly" },
+        { path = LocalPlayer.PlayerScripts, name = "PlayerScriptsLoader" },
+        { path = LocalPlayer.PlayerScripts, name = "antiflyhacks" }
     }
 
     local removedSomething = false
     for _, item in ipairs(antiCheatItems) do
-        if item and item.Parent then
-            item:Destroy()
-            removedSomething = true
+        local obj
+        if item.index then
+            obj = item.path:GetChildren()[item.index]
+        else
+            obj = item.path and item.path:FindFirstChild(item.name)
         end
+        if obj and obj.Parent then
+            obj:Destroy()
+            removedSomething = true
+            -- print("Destroyed: " .. (item.name or "index " .. item.index)) -- Debug (commented)
+        end
+        -- else print("Not found: " .. (item.name or "index " .. item.index)) -- Debug (commented)
     end
 
-    -- Show notification if something was removed and cooldown has passed
-    if removedSomething and tick() - lastNotificationTime >= notificationCooldown then
+    -- Show notification if something was removed or on initial run
+    if (removedSomething or not initialNotificationShown) and tick() - lastNotificationTime >= notificationCooldown then
         Rayfield:Notify({
             Title = "Bypass Enable",
             Content = "Anti-cheat scripts and objects have been removed.",
             Duration = 3,
-            Image = "rbxassetid://4483345998" -- Optional icon
+            Image = "rbxassetid://4483345998"
         })
         lastNotificationTime = tick()
+        initialNotificationShown = true
     end
 end
 

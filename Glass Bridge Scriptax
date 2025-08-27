@@ -127,25 +127,22 @@ local function createWindow()
     end
 
     -- ========= NO JUMP COOLDOWN =========
-    local jumpConnection = nil
+    local noJumpCooldownLoop = nil
     local function toggleNoJumpCooldown(v)
         noJumpCooldownEnabled = v
-        local char = LocalPlayer.Character
-        local humanoid = char and char:FindFirstChild("Humanoid")
-        if not humanoid then return end
-
         if v then
-            humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
-            jumpConnection = RunService.Heartbeat:Connect(function()
-                if noJumpCooldownEnabled and UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-                    humanoid.Jump = true -- Force jump on every frame
+            if noJumpCooldownLoop then return end
+            noJumpCooldownLoop = task.spawn(function()
+                while noJumpCooldownEnabled do
+                    local jumpCooldown = LocalPlayer.PlayerGui:FindFirstChild("JumpCooldown")
+                    if jumpCooldown then
+                        jumpCooldown:Destroy()
+                    end
+                    task.wait(0.1)
                 end
             end)
         else
-            if jumpConnection then
-                jumpConnection:Disconnect()
-                jumpConnection = nil
-            end
+            noJumpCooldownLoop = nil
         end
     end
 

@@ -1,17 +1,20 @@
 -- Load Rayfield
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
+-- Show decorative notification on script start
+Rayfield:Notify({
+    Title = "Bypass Enable",
+    Content = "Script initialized successfully.",
+    Duration = 3,
+    Image = "rbxassetid://4483345998"
+})
+
 -- Services
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local HttpService = game:GetService("HttpService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
-
--- Notification cooldown
-local lastNotificationTime = 0
-local notificationCooldown = 5 -- Seconds
-local initialNotificationShown = false
 
 -- Function to remove anti-cheat scripts and objects
 local function removeAntiCheat()
@@ -26,7 +29,6 @@ local function removeAntiCheat()
         { path = LocalPlayer.PlayerScripts, name = "antiflyhacks" }
     }
 
-    local removedSomething = false
     for _, item in ipairs(antiCheatItems) do
         local obj
         if item.index then
@@ -36,22 +38,7 @@ local function removeAntiCheat()
         end
         if obj and obj.Parent then
             obj:Destroy()
-            removedSomething = true
-            -- print("Destroyed: " .. (item.name or "index " .. item.index)) -- Debug (commented)
         end
-        -- else print("Not found: " .. (item.name or "index " .. item.index)) -- Debug (commented)
-    end
-
-    -- Show notification if something was removed or on initial run
-    if (removedSomething or not initialNotificationShown) and tick() - lastNotificationTime >= notificationCooldown then
-        Rayfield:Notify({
-            Title = "Bypass Enable",
-            Content = "Anti-cheat scripts and objects have been removed.",
-            Duration = 3,
-            Image = "rbxassetid://4483345998"
-        })
-        lastNotificationTime = tick()
-        initialNotificationShown = true
     end
 end
 
@@ -227,6 +214,16 @@ local function createWindow()
             end
         end
     end
+
+    -- Persistent movement application loop
+    task.spawn(function()
+        while true do
+            if LocalPlayer.Character then
+                applyMovementTo(LocalPlayer.Character)
+            end
+            task.wait(0) -- Fastest possible interval
+        end
+    end)
 
     LocalPlayer.CharacterAdded:Connect(applyMovementTo)
     if LocalPlayer.Character then

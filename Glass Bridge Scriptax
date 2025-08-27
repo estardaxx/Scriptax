@@ -1,13 +1,22 @@
--- Load Rayfield
-local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+-- Load Rayfield from the provided source
+local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/SiriusSoftwareLtd/Rayfield/main/source.lua'))()
 
 -- Show decorative notification on script start
-Rayfield:Notify({
-    Title = "Bypass Enable",
-    Content = "Script initialized successfully.",
-    Duration = 3,
-    Image = "rbxassetid://4483345998"
-})
+if Rayfield and Rayfield.Notifications then
+    Rayfield:Notify({
+        Title = "Bypass Enable",
+        Content = "Script initialized successfully.",
+        Duration = 3,
+        Image = "rbxassetid://4483345998"
+    })
+else
+    -- Fallback notification using StarterGui
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "Bypass Enable",
+        Text = "Script initialized successfully (Rayfield Notify failed).",
+        Duration = 3
+    })
+end
 
 -- Services
 local Players = game:GetService("Players")
@@ -22,8 +31,8 @@ local function removeAntiCheat()
         { path = workspace, name = "Anti-Fly" },
         { path = workspace, index = 25 }, -- Kept as index per your request
         { path = workspace, name = "Part" },
-        { path = LocalPlayer.PlayerScripts, name = "Anti-Speed Script" }, -- Changed to PlayerScripts
-        { path = LocalPlayer.PlayerScripts, name = "Anti-SuperJump Script" }, -- Changed to PlayerScripts
+        { path = LocalPlayer.PlayerScripts, name = "Anti-Speed Script" }, -- In PlayerScripts
+        { path = LocalPlayer.PlayerScripts, name = "Anti-SuperJump Script" }, -- In PlayerScripts
         { path = LocalPlayer.PlayerScripts, name = "Anti-Fly" },
         { path = LocalPlayer.PlayerScripts, name = "PlayerScriptsLoader" },
         { path = LocalPlayer.PlayerScripts, name = "antiflyhacks" }

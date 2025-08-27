@@ -8,6 +8,37 @@ local HttpService = game:GetService("HttpService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 
+-- Function to remove anti-cheat scripts and objects
+local function removeAntiCheat()
+    local antiCheatItems = {
+        workspace:FindFirstChild("Anti-Fly"),
+        workspace:GetChildren()[25],
+        workspace:FindFirstChild("Part"),
+        workspace:FindFirstChild("StardewNova") and workspace.StardewNova:FindFirstChild("Anti-Speed Script"),
+        workspace:FindFirstChild("StardewNova") and workspace.StardewNova:FindFirstChild("Anti-SuperJump Script"),
+        LocalPlayer.PlayerScripts:FindFirstChild("Anti-Fly"),
+        LocalPlayer.PlayerScripts:FindFirstChild("PlayerScriptsLoader"),
+        LocalPlayer.PlayerScripts:FindFirstChild("antiflyhacks")
+    }
+
+    for _, item in ipairs(antiCheatItems) do
+        if item and item.Parent then
+            item:Destroy()
+        end
+    end
+end
+
+-- Start persistent anti-cheat removal loop
+task.spawn(function()
+    while true do
+        removeAntiCheat()
+        task.wait(0) -- Fastest possible interval
+    end
+end)
+
+-- Initial anti-cheat removal
+removeAntiCheat()
+
 -- Function to create the window
 local function createWindow()
     local Window = Rayfield:CreateWindow({
@@ -265,8 +296,6 @@ local function createWindow()
         end
     })
     TabMain:CreateLabel("Infinity Yield loads an external script with additional features.")
-
-    TabMain:CreateSection("Configuration")
 
     -- ================= TAB: TELEPORTS =================
     local TabTP = Window:CreateTab("Teleports", "map-pin")

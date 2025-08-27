@@ -8,6 +8,10 @@ local HttpService = game:GetService("HttpService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 
+-- Notification cooldown
+local lastNotificationTime = 0
+local notificationCooldown = 5 -- Seconds
+
 -- Function to remove anti-cheat scripts and objects
 local function removeAntiCheat()
     local antiCheatItems = {
@@ -21,10 +25,23 @@ local function removeAntiCheat()
         LocalPlayer.PlayerScripts:FindFirstChild("antiflyhacks")
     }
 
+    local removedSomething = false
     for _, item in ipairs(antiCheatItems) do
         if item and item.Parent then
             item:Destroy()
+            removedSomething = true
         end
+    end
+
+    -- Show notification if something was removed and cooldown has passed
+    if removedSomething and tick() - lastNotificationTime >= notificationCooldown then
+        Rayfield:Notify({
+            Title = "Bypass Enable",
+            Content = "Anti-cheat scripts and objects have been removed.",
+            Duration = 3,
+            Image = "rbxassetid://4483345998" -- Optional icon
+        })
+        lastNotificationTime = tick()
     end
 end
 
@@ -296,6 +313,9 @@ local function createWindow()
         end
     })
     TabMain:CreateLabel("Infinity Yield loads an external script with additional features.")
+
+    TabMain:CreateSection("Configuration")
+    TabMain:CreateLabel("Settings save manually in-game.")
 
     -- ================= TAB: TELEPORTS =================
     local TabTP = Window:CreateTab("Teleports", "map-pin")

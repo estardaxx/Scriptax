@@ -1,0 +1,77 @@
+-- Cargar la librería Rayfield
+local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/shlexware/Rayfield/main/source'))()
+
+-- Crear la ventana de la interfaz
+local Window = Rayfield:CreateWindow({
+    Name = "Colorear Vidrios",
+    LoadingTitle = "Interfaz de Control",
+    LoadingSubtitle = "by TuNombre",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = nil, -- Usa la carpeta por defecto
+        FileName = "ColorearVidrios"
+    }
+})
+
+-- Crear una pestaña
+local Tab = Window:CreateTab("Colorear", 4483362458) -- Ícono opcional
+
+-- Función para colorear glass_tempered de verde
+local function colorearTempered()
+    for _, step in pairs(workspace:GetChildren()) do
+        if step.Name == "Step" and step:IsA("Model") then
+            local glassTempered = step:FindFirstChild("glass_tempered")
+            if glassTempered then
+                for _, part in pairs(glassTempered:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.BrickColor = BrickColor.new("Lime green")
+                    end
+                end
+            end
+        end
+    end
+    Rayfield:Notify({
+        Title = "Éxito",
+        Content = "Todos los glass_tempered han sido coloreados de verde.",
+        Duration = 3,
+        Image = 4483362458
+    })
+end
+
+-- Función para colorear glass_weak de rojo
+local function colorearWeak()
+    for _, step in pairs(workspace:GetChildren()) do
+        if step.Name == "Step" and step:IsA("Model") then
+            local glassWeak = step:FindFirstChild("glass_weak")
+            if glassWeak then
+                for _, part in pairs(glassWeak:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.BrickColor = BrickColor.new("Really red")
+                    end
+                end
+            end
+        end
+    end
+    Rayfield:Notify({
+        Title = "Éxito",
+        Content = "Todos los glass_weak han sido coloreados de rojo.",
+        Duration = 3,
+        Image = 4483362458
+    })
+end
+
+-- Botón para colorear glass_tempered
+Tab:CreateButton({
+    Name = "Colorear glass_tempered de Verde",
+    Callback = function()
+        colorearTempered()
+    end
+})
+
+-- Botón para colorear glass_weak
+Tab:CreateButton({
+    Name = "Colorear glass_weak de Rojo",
+    Callback = function()
+        colorearWeak()
+    end
+})

@@ -6,15 +6,15 @@ if Rayfield and Rayfield.Notifications then
     Rayfield:Notify({
         Title = "Bypass Enable",
         Content = "Script initialized successfully.",
-        Duration = 3,
-        Image = "rbxassetid://4483345998"
+        Duration = 6.5,
+        Image = 4483362458,
     })
 else
     -- Fallback notification using StarterGui
     game:GetService("StarterGui"):SetCore("SendNotification", {
         Title = "Bypass Enable",
         Text = "Script initialized successfully (Rayfield Notify failed).",
-        Duration = 3
+        Duration = 6.5
     })
 end
 

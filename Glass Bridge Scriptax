@@ -149,12 +149,21 @@ local function createWindow()
     -- ========= MOVEMENT (persists on respawn) =========
     local savedWalkSpeed = 16
     local savedJumpPower = 50
+    local lastAppliedWalkSpeed = 16
+    local lastAppliedJumpPower = 50
 
     local function applyMovementTo(char)
         local hum = char:WaitForChild("Humanoid", 5) -- Wait for Humanoid with timeout
         if hum then
-            hum.WalkSpeed = savedWalkSpeed
-            hum.JumpPower = savedJumpPower
+            -- Only apply if values have changed to reduce detection
+            if savedWalkSpeed ~= lastAppliedWalkSpeed then
+                hum.WalkSpeed = savedWalkSpeed
+                lastAppliedWalkSpeed = savedWalkSpeed
+            end
+            if savedJumpPower ~= lastAppliedJumpPower then
+                hum.JumpPower = savedJumpPower
+                lastAppliedJumpPower = savedJumpPower
+            end
             if noJumpCooldownEnabled then
                 hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
             end
@@ -223,7 +232,7 @@ local function createWindow()
             savedWalkSpeed = val
             local char = LocalPlayer.Character
             if char and char:FindFirstChild("Humanoid") then
-                char.Humanoid.WalkSpeed = val
+                applyMovementTo(char)
             end
         end,
     })
@@ -237,7 +246,7 @@ local function createWindow()
             savedJumpPower = val
             local char = LocalPlayer.Character
             if char and char:FindFirstChild("Humanoid") then
-                char.Humanoid.JumpPower = val
+                applyMovementTo(char)
             end
         end,
     })
@@ -258,7 +267,6 @@ local function createWindow()
     TabMain:CreateLabel("Infinity Yield loads an external script with additional features.")
 
     TabMain:CreateSection("Configuration")
-    TabMain:CreateLabel("Settings save manually in-game.")
 
     -- ================= TAB: TELEPORTS =================
     local TabTP = Window:CreateTab("Teleports", "map-pin")

@@ -24,9 +24,9 @@ if not success or not Rayfield then
 else
     -- Show decorative notification on script start
     Rayfield:Notify({
-        Title = "Glass Color Menu",
-        Content = "Script initialized successfully.",
-        Duration = 3,
+        Title = "Scriptax HUB",
+        Content = "Welcome to Scriptax HUB! Glass Color Menu loaded successfully.",
+        Duration = 4,
         Image = "rbxassetid://4483345998"
     })
 
@@ -34,6 +34,7 @@ else
     local Players = game:GetService("Players")
     local LocalPlayer = Players.LocalPlayer
     local UserInputService = game:GetService("UserInputService")
+    local RunService = game:GetService("RunService")
 
     -- Function to create the window
     local function createWindow()
@@ -66,11 +67,75 @@ else
         local espStroke = nil -- Reference to the ESP UIStroke for borders
         local correctStroke = nil -- Reference to the Correct All UIStroke for borders
         local cachedParts = { tempered = {}, weak = {} } -- Cache for parts to color
+        local autoLoadToggle = nil -- Reference to auto load toggle
+        local profileDropdown = nil -- Reference to profile dropdown
+        local currentProfile = "Default" -- Current selected profile
+        local profiles = {["Default"] = {}} -- Profile storage
+        
+        -- Auto-refresh connection
+        local refreshConnection = nil
+
+        -- Profile management functions
+        local function saveProfile(profileName)
+            if not profileName or profileName == "" then return end
+            
+            profiles[profileName] = {
+                glassEspEnabled = glassEspEnabled,
+                correctAllEnabled = correctAllEnabled,
+                espButtonEnabled = floatingEspButtonToggle and floatingEspButtonToggle.CurrentValue or false,
+                correctButtonEnabled = floatingCorrectButtonToggle and floatingCorrectButtonToggle.CurrentValue or false,
+                espButtonPosition = floatingEspButton and {floatingEspButton.Position.X.Scale, floatingEspButton.Position.X.Offset, floatingEspButton.Position.Y.Scale, floatingEspButton.Position.Y.Offset} or {0.4, 0, 0.5, 0},
+                correctButtonPosition = floatingCorrectButton and {floatingCorrectButton.Position.X.Scale, floatingCorrectButton.Position.X.Offset, floatingCorrectButton.Position.Y.Scale, floatingCorrectButton.Position.Y.Offset} or {0.6, 0, 0.5, 0}
+            }
+        end
+
+        local function loadProfile(profileName)
+            if not profiles[profileName] then return end
+            local profile = profiles[profileName]
+            
+            -- Load ESP state
+            if profile.glassEspEnabled ~= glassEspEnabled then
+                toggleGlassEsp()
+            end
+            
+            -- Load Correct All state
+            if profile.correctAllEnabled ~= correctAllEnabled then
+                toggleCorrectAll()
+            end
+            
+            -- Load floating buttons
+            if floatingEspButtonToggle then
+                floatingEspButtonToggle:Set(profile.espButtonEnabled or false)
+            end
+            if floatingCorrectButtonToggle then
+                floatingCorrectButtonToggle:Set(profile.correctButtonEnabled or false)
+            end
+            
+            -- Restore button positions
+            if floatingEspButton and profile.espButtonPosition then
+                local pos = profile.espButtonPosition
+                floatingEspButton.Position = UDim2.new(pos[1], pos[2], pos[3], pos[4])
+            end
+            if floatingCorrectButton and profile.correctButtonPosition then
+                local pos = profile.correctButtonPosition
+                floatingCorrectButton.Position = UDim2.new(pos[1], pos[2], pos[3], pos[4])
+            end
+            
+            currentProfile = profileName
+            Rayfield:Notify({
+                Title = "Profile Loaded",
+                Content = "Load " .. profileName,
+                Duration = 3,
+                Image = "rbxassetid://4483345998"
+            })
+        end
 
         -- Cache parts to color
         local function cacheParts()
             cachedParts.tempered = {}
             cachedParts.weak = {}
+            originalProps = {} -- Reset original props
+            
             for _, step in pairs(workspace:GetChildren()) do
                 if step.Name == "Step" and step:IsA("Model") then
                     local glassTempered = step:FindFirstChild("glass_tempered")
@@ -126,16 +191,17 @@ else
                 if step.Name == "Step" and step:IsA("Model") then
                     local glassWeak = step:FindFirstChild("glass_weak")
                     if glassWeak then
-                        -- Color weak glass parts blue
+                        -- Color weak glass parts blue neon
                         for _, part in pairs(glassWeak:GetDescendants()) do
                             if part:IsA("BasePart") or part:IsA("MeshPart") then
                                 part.Color = Color3.fromRGB(0, 0, 255) -- Blue
+                                part.Material = Enum.Material.Neon -- Make it neon
                             end
                         end
                         
                         -- Hide detector instead of destroying it
                         local detector = glassWeak:FindFirstChild("Detector")
-                        if detector then
+                        if detector and not hiddenDetectors[glassWeak] then
                             detector.Parent = nil -- Remove from parent but don't destroy
                             hiddenDetectors[glassWeak] = detector -- Store reference
                         end
@@ -156,6 +222,15 @@ else
 
         -- Reset Correct All
         local function resetCorrectAll()
+            -- First restore all detectors
+            for glassWeak, detector in pairs(hiddenDetectors) do
+                if glassWeak and glassWeak.Parent and detector then
+                    detector.Parent = glassWeak
+                end
+            end
+            hiddenDetectors = {} -- Clear the table
+            
+            -- Then reset colors
             for _, step in pairs(workspace:GetChildren()) do
                 if step.Name == "Step" and step:IsA("Model") then
                     local glassWeak = step:FindFirstChild("glass_weak")
@@ -165,22 +240,27 @@ else
                             if part:IsA("BasePart") or part:IsA("MeshPart") then
                                 if originalProps[part] then
                                     part.Color = originalProps[part].Color
+                                    part.Material = originalProps[part].Material
                                 end
                             end
-                        end
-                        
-                        -- Restore detector
-                        if hiddenDetectors[glassWeak] then
-                            hiddenDetectors[glassWeak].Parent = glassWeak
-                            hiddenDetectors[glassWeak] = nil
                         end
                     end
                 end
             end
         end
 
+        -- Auto-refresh function
+        local function autoRefresh()
+            if glassEspEnabled then
+                applyGlassEsp()
+            end
+            if correctAllEnabled then
+                applyCorrectAll()
+            end
+        end
+
         -- Toggle ESP
-        local function toggleGlassEsp()
+        function toggleGlassEsp()
             glassEspEnabled = not glassEspEnabled
             if GlassEspToggle then GlassEspToggle:Set(glassEspEnabled) end
             if glassEspEnabled then
@@ -210,18 +290,18 @@ else
         end
 
         -- Toggle Correct All
-        local function toggleCorrectAll()
+        function toggleCorrectAll()
             correctAllEnabled = not correctAllEnabled
             if CorrectAllToggle then CorrectAllToggle:Set(correctAllEnabled) end
             if correctAllEnabled then
                 cacheParts()
                 applyCorrectAll()
                 if correctStroke then
-                    correctStroke.Color = Color3.fromRGB(0, 0, 255) -- Blue borders
+                    correctStroke.Color = Color3.fromRGB(0, 255, 0) -- Green borders (changed from blue)
                 end
                 Rayfield:Notify({
                     Title = "Success",
-                    Content = "glass_weak (blue) enabled and detectors hidden.",
+                    Content = "glass_weak (blue neon) enabled and detectors hidden.",
                     Duration = 3,
                     Image = "rbxassetid://4483345998"
                 })
@@ -249,7 +329,7 @@ else
             screenGui.ResetOnSpawn = false -- Prevent reset on death
 
             floatingEspButton = Instance.new("Frame")
-            floatingEspButton.Size = UDim2.new(0, 60, 0, 60)
+            floatingEspButton.Size = UDim2.new(0, 50, 0, 50) -- Made smaller
             floatingEspButton.Position = UDim2.new(0.4, 0, 0.5, 0)
             floatingEspButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255) -- White background
             floatingEspButton.BorderSizePixel = 0
@@ -325,7 +405,7 @@ else
             screenGui.ResetOnSpawn = false -- Prevent reset on death
 
             floatingCorrectButton = Instance.new("Frame")
-            floatingCorrectButton.Size = UDim2.new(0, 60, 0, 60)
+            floatingCorrectButton.Size = UDim2.new(0, 50, 0, 50) -- Made smaller and same size as ESP
             floatingCorrectButton.Position = UDim2.new(0.6, 0, 0.5, 0)
             floatingCorrectButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255) -- White background
             floatingCorrectButton.BorderSizePixel = 0
@@ -337,7 +417,7 @@ else
 
             correctStroke = Instance.new("UIStroke")
             correctStroke.Thickness = 2
-            correctStroke.Color = correctAllEnabled and Color3.fromRGB(0, 0, 255) or Color3.fromRGB(0, 0, 0) -- Sync with Correct All state
+            correctStroke.Color = correctAllEnabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(0, 0, 0) -- Green borders like ESP
             correctStroke.Parent = floatingCorrectButton
 
             local textLabel = Instance.new("TextLabel")
@@ -345,8 +425,8 @@ else
             textLabel.BackgroundTransparency = 1
             textLabel.Text = "ALL"
             textLabel.TextColor3 = Color3.fromRGB(0, 0, 0) -- Black text
-            textLabel.TextSize = 12
-            textLabel.Font = Enum.Font.SourceSansBold
+            textLabel.TextSize = 14 -- Same size as ESP
+            textLabel.Font = Enum.Font.SourceSansBold -- Same font as ESP
             textLabel.Parent = floatingCorrectButton
 
             local button = Instance.new("TextButton")
@@ -356,7 +436,7 @@ else
             button.Parent = floatingCorrectButton
             button.MouseButton1Click:Connect(toggleCorrectAll)
 
-            -- Make it draggable
+            -- Make it draggable (same as ESP)
             local dragging = false
             local dragInput, dragStart, startPos
 
@@ -411,12 +491,36 @@ else
 
         -- Recreate floating buttons on character respawn
         LocalPlayer.CharacterAdded:Connect(function()
+            -- Wait a bit for the game to stabilize
+            task.wait(2)
+            
+            -- Reset states properly
+            hiddenDetectors = {}
+            originalProps = {}
+            
+            -- Recreate buttons if they were enabled
             if floatingEspButtonToggle and floatingEspButtonToggle.CurrentValue then
                 createFloatingEspButton()
             end
             if floatingCorrectButtonToggle and floatingCorrectButtonToggle.CurrentValue then
                 createFloatingCorrectButton()
             end
+            
+            -- Re-cache and reapply if needed
+            if glassEspEnabled or correctAllEnabled then
+                cacheParts()
+                if glassEspEnabled then
+                    applyGlassEsp()
+                end
+                if correctAllEnabled then
+                    applyCorrectAll()
+                end
+            end
+        end)
+
+        -- Auto-refresh system to maintain effects
+        refreshConnection = RunService.Heartbeat:Connect(function()
+            autoRefresh()
         end)
 
         -- =================== TAB: MAIN ===================
@@ -466,11 +570,11 @@ else
                     cacheParts()
                     applyCorrectAll()
                     if correctStroke then
-                        correctStroke.Color = Color3.fromRGB(0, 0, 255)
+                        correctStroke.Color = Color3.fromRGB(0, 255, 0)
                     end
                     Rayfield:Notify({
                         Title = "Success",
-                        Content = "glass_weak (blue) enabled and detectors hidden.",
+                        Content = "glass_weak (blue neon) enabled and detectors hidden.",
                         Duration = 3,
                         Image = "rbxassetid://4483345998"
                     })
@@ -570,6 +674,7 @@ else
         TabCredits:CreateSection("Script Information")
         TabCredits:CreateLabel("Glass Color Menu | Made by Estardax ⚡")
         TabCredits:CreateLabel("UI powered by Rayfield Library")
+        TabCredits:CreateLabel("Scriptax HUB - Advanced Glass Bridge Tools")
 
         return Window
     end

@@ -33,9 +33,7 @@ else
     -- Services
     local Players = game:GetService("Players")
     local LocalPlayer = Players.LocalPlayer
-    local HttpService = game:GetService("HttpService")
     local UserInputService = game:GetService("UserInputService")
-    local RunService = game:GetService("RunService")
 
     -- Function to create the window
     local function createWindow()
@@ -62,10 +60,6 @@ else
         local floatingButtonToggle = nil -- Reference to the mobile toggle
         local stroke = nil -- Reference to the UIStroke for borders
         local cachedParts = { tempered = {} } -- Cache for parts to color
-        local detectorToggle = nil -- Reference to Detector toggle
-        local detectorEnabled = false
-        local detectorOriginalParent = nil
-        local detectorInstance = nil
         local correctAllToggle = nil -- Reference to Correct All toggle
 
         -- Cache parts to color
@@ -242,74 +236,19 @@ else
             end
         end)
 
-        -- Handle Detector toggle
-        local function toggleDetector()
-            detectorEnabled = not detectorEnabled
-            if detectorToggle then detectorToggle:Set(detectorEnabled) end
-            local step = workspace:GetChildren()[234]
-            if not step or step.Name ~= "Step" or not step:IsA("Model") then
-                Rayfield:Notify({
-                    Title = "Error",
-                    Content = "Step[234] not found or invalid.",
-                    Duration = 5,
-                    Image = "rbxassetid://4483345998"
-                })
-                return
-            end
-            local glassWeak = step:FindFirstChild("glass_weak")
-            if not glassWeak then
-                Rayfield:Notify({
-                    Title = "Error",
-                    Content = "glass_weak not found in Step[234].",
-                    Duration = 5,
-                    Image = "rbxassetid://4483345998"
-                })
-                return
-            end
-            local detector = glassWeak:FindFirstChild("Detector")
-            if detectorEnabled then
-                if detector then
-                    detectorOriginalParent = detector.Parent
-                    detectorInstance = detector
-                    detector.Parent = nil -- Remove from game
-                    Rayfield:Notify({
-                        Title = "Success",
-                        Content = "Detector removed.",
-                        Duration = 3,
-                        Image = "rbxassetid://4483345998"
-                    })
-                else
-                    Rayfield:Notify({
-                        Title = "Error",
-                        Content = "Detector not found in glass_weak.",
-                        Duration = 5,
-                        Image = "rbxassetid://4483345998"
-                    })
-                end
-            else
-                if detectorInstance and detectorOriginalParent then
-                    detectorInstance.Parent = detectorOriginalParent -- Restore
-                    Rayfield:Notify({
-                        Title = "Success",
-                        Content = "Detector restored.",
-                        Duration = 3,
-                        Image = "rbxassetid://4483345998"
-                    })
-                end
-            end
-        end
-
-        -- Correct All (convert glass_weak to glass_tempered)
+        -- Correct All (rename glass_weak to glass_tempered, color blue, destroy Detector)
         local function correctAllGlass()
             for _, step in pairs(workspace:GetChildren()) do
                 if step.Name == "Step" and step:IsA("Model") then
                     local glassWeak = step:FindFirstChild("glass_weak")
                     if glassWeak then
+                        local detector = glassWeak:FindFirstChild("Detector")
+                        if detector then
+                            detector:Destroy()
+                        end
                         glassWeak.Name = "glass_tempered"
                         for _, part in pairs(glassWeak:GetDescendants()) do
                             if part:IsA("BasePart") or part:IsA("MeshPart") then
-                                part.CanCollide = true
-                                part.Material = Enum.Material.Glass
                                 part.Color = Color3.fromRGB(0, 0, 255) -- Blue
                             end
                         end
@@ -322,7 +261,7 @@ else
             end
             Rayfield:Notify({
                 Title = "Success",
-                Content = "All glass_weak converted to glass_tempered (blue).",
+                Content = "All glass_weak converted to glass_tempered (blue) and Detectors destroyed.",
                 Duration = 3,
                 Image = "rbxassetid://4483345998"
             })
@@ -362,14 +301,6 @@ else
                     })
                 end
             end,
-        })
-
-        TabMain:CreateSection("Detector Control")
-        detectorToggle = TabMain:CreateToggle({
-            Name = "Remove Detector",
-            CurrentValue = false,
-            Flag = "Detector_Toggle",
-            Callback = toggleDetector
         })
 
         TabMain:CreateSection("Correct All")
@@ -424,13 +355,6 @@ else
             HoldToInteract = false,
             Flag = "Keybind_GlassESP",
             Callback = toggleGlassEsp
-        })
-        TabKeys:CreateKeybind({
-            Name = "Toggle Detector",
-            CurrentKeybind = "",
-            HoldToInteract = false,
-            Flag = "Keybind_Detector",
-            Callback = toggleDetector
         })
         TabKeys:CreateKeybind({
             Name = "Correct All Glass",

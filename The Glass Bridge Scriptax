@@ -58,7 +58,7 @@ else
         local correctAllEnabled = false
         local originalTempered = {} -- [part] = {Color=..., Material=...}
         local originalWeak = {} -- [part] = {Color=..., Material=...}
-        local hiddenDetectors = {} -- Store hidden detectors to restore later
+        local hiddenDetectors = {} -- Store hidden detectors props to restore later
         local GlassEspToggle = nil -- Reference to Glass ESP toggle
         local CorrectAllToggle = nil -- Reference to Correct All toggle
         local floatingEspButton = nil -- Reference to the ESP floating button UI
@@ -67,10 +67,6 @@ else
         local floatingCorrectButtonToggle = nil -- Reference to the Correct All mobile toggle
         local espStroke = nil -- Reference to the ESP UIStroke for borders
         local correctStroke = nil -- Reference to the Correct All UIStroke for borders
-        local autoLoadToggle = nil -- Reference to auto load toggle
-        local profileDropdown = nil -- Reference to profile dropdown
-        local currentProfile = "Default" -- Current selected profile
-        local profiles = {["Default"] = {}} -- Profile storage
         
         -- ChildAdded connection for dynamic steps
         local childAddedConnection = workspace.ChildAdded:Connect(function(child)
@@ -83,61 +79,6 @@ else
                 end
             end
         end)
-
-        -- Profile management functions
-        local function saveProfile(profileName)
-            if not profileName or profileName == "" then return end
-            
-            profiles[profileName] = {
-                glassEspEnabled = glassEspEnabled,
-                correctAllEnabled = correctAllEnabled,
-                espButtonEnabled = floatingEspButtonToggle and floatingEspButtonToggle.CurrentValue or false,
-                correctButtonEnabled = floatingCorrectButtonToggle and floatingCorrectButtonToggle.CurrentValue or false,
-                espButtonPosition = floatingEspButton and {floatingEspButton.Position.X.Scale, floatingEspButton.Position.X.Offset, floatingEspButton.Position.Y.Scale, floatingEspButton.Position.Y.Offset} or {0.4, 0, 0.5, 0},
-                correctButtonPosition = floatingCorrectButton and {floatingCorrectButton.Position.X.Scale, floatingCorrectButton.Position.X.Offset, floatingCorrectButton.Position.Y.Scale, floatingCorrectButton.Position.Y.Offset} or {0.6, 0, 0.5, 0}
-            }
-        end
-
-        local function loadProfile(profileName)
-            if not profiles[profileName] then return end
-            local profile = profiles[profileName]
-            
-            -- Load ESP state
-            if profile.glassEspEnabled ~= glassEspEnabled then
-                toggleGlassEsp()
-            end
-            
-            -- Load Correct All state
-            if profile.correctAllEnabled ~= correctAllEnabled then
-                toggleCorrectAll()
-            end
-            
-            -- Load floating buttons
-            if floatingEspButtonToggle then
-                floatingEspButtonToggle:Set(profile.espButtonEnabled or false)
-            end
-            if floatingCorrectButtonToggle then
-                floatingCorrectButtonToggle:Set(profile.correctButtonEnabled or false)
-            end
-            
-            -- Restore button positions
-            if floatingEspButton and profile.espButtonPosition then
-                local pos = profile.espButtonPosition
-                floatingEspButton.Position = UDim2.new(pos[1], pos[2], pos[3], pos[4])
-            end
-            if floatingCorrectButton and profile.correctButtonPosition then
-                local pos = profile.correctButtonPosition
-                floatingCorrectButton.Position = UDim2.new(pos[1], pos[2], pos[3], pos[4])
-            end
-            
-            currentProfile = profileName
-            Rayfield:Notify({
-                Title = "Profile Loaded",
-                Content = "Loaded " .. profileName,
-                Duration = 3,
-                Image = "rbxassetid://4483345998"
-            })
-        end
 
         -- Apply ESP to a single step
         local function applyToStepEsp(step)
@@ -170,11 +111,12 @@ else
                     end
                 end
                 
-                -- Hide detector instead of destroying it
+                -- Hide detector by making it transparent and non-collidable
                 local detector = glassWeak:FindFirstChild("Detector")
-                if detector and not hiddenDetectors[glassWeak] then
-                    hiddenDetectors[glassWeak] = detector
-                    detector.Parent = nil -- Remove from parent but don't destroy
+                if detector and detector:IsA("BasePart") and not hiddenDetectors[glassWeak] then
+                    hiddenDetectors[glassWeak] = { Transparency = detector.Transparency, CanCollide = detector.CanCollide }
+                    detector.Transparency = 1
+                    detector.CanCollide = false
                 end
             end
         end
@@ -205,25 +147,31 @@ else
                     part.Material = props.Material
                 end
             end
+            originalTempered = {} -- Clear after reset
         end
 
         -- Reset Correct All
         local function resetCorrectAll()
-            -- First restore all detectors
-            for glassWeak, detector in pairs(hiddenDetectors) do
-                if glassWeak and glassWeak:IsDescendantOf(workspace) and detector and not detector.Parent then
-                    detector.Parent = glassWeak
+            -- Restore detectors
+            for glassWeak, props in pairs(hiddenDetectors) do
+                if glassWeak and glassWeak:IsDescendantOf(workspace) then
+                    local detector = glassWeak:FindFirstChild("Detector")
+                    if detector then
+                        detector.Transparency = props.Transparency
+                        detector.CanCollide = props.CanCollide
+                    end
                 end
             end
             hiddenDetectors = {} -- Clear the table
             
-            -- Then reset colors
+            -- Reset colors
             for part, props in pairs(originalWeak) do
                 if part and part:IsDescendantOf(workspace) then
                     part.Color = props.Color
                     part.Material = props.Material
                 end
             end
+            originalWeak = {} -- Clear after reset
         end
 
         -- Toggle ESP
@@ -630,6 +578,6 @@ else
         return Window
     end
 
-    -- Initial creation with default profile
+    -- Initial creation
     createWindow()
 end

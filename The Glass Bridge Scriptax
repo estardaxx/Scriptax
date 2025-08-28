@@ -7,11 +7,11 @@ end)
 if not success or not Rayfield then
     warn("Failed to load Rayfield from https://sirius.menu/rayfield. Running script without UI.")
     -- Fallback script without UI
-    for _, step in ipairs(workspace:GetChildren()) do
-        if step:IsA("Model") and step:FindFirstChild("glass_tempered") then
+    for _, step in pairs(workspace:GetChildren()) do
+        if step.Name == "Step" and step:IsA("Model") then
             local glassTempered = step:FindFirstChild("glass_tempered")
             if glassTempered then
-                for _, part in ipairs(glassTempered:GetDescendants()) do
+                for _, part in pairs(glassTempered:GetDescendants()) do
                     if part:IsA("BasePart") or part:IsA("MeshPart") then
                         part.Color = Color3.fromRGB(0, 255, 0) -- Neon green
                         part.Material = Enum.Material.Neon
@@ -25,7 +25,7 @@ else
     -- Show decorative notification on script start
     Rayfield:Notify({
         Title = "Scriptax HUB",
-        Content = "Welcome to Scriptax HUB! Glass Color Menu loaded (simple, crash-proof, auto-reapply).",
+        Content = "Welcome to Scriptax HUB! Glass Color Menu loaded successfully.",
         Duration = 4,
         Image = "rbxassetid://4483345998"
     })
@@ -57,7 +57,6 @@ else
         local glassEspEnabled = false
         local originalTempered = {} -- [part] = {Color=..., Material=...}
         local GlassEspToggle = nil -- Reference to Glass ESP toggle
-        local DebugLagToggle = nil -- Opcional: Para medir lag
         local floatingEspButton = nil -- Reference to the ESP floating button UI
         local floatingCorrectButton = nil -- Reference to the Correct All floating button UI
         local floatingEspButtonToggle = nil -- Reference to the ESP mobile toggle
@@ -65,67 +64,85 @@ else
         local espStroke = nil -- Reference to the ESP UIStroke for borders
         local correctStroke = nil -- Reference to the Correct All UIStroke for borders
         
-        -- ChildAdded connection for dynamic steps (crash-proof)
+        -- ChildAdded connection for dynamic steps (for ESP) - Mejorado con delay
         local childAddedConnection = workspace.ChildAdded:Connect(function(child)
-            if glassEspEnabled and child:IsA("Model") and child:FindFirstChild("glass_tempered") then
-                pcall(function()
-                    local glassTempered = child:FindFirstChild("glass_tempered")
-                    local retries = 0
-                    while not glassTempered and retries < 3 do
-                        task.wait(0.2)
-                        glassTempered = child:FindFirstChild("glass_tempered")
-                        retries = retries + 1
-                    end
-                    if glassTempered then
-                        for _, part in ipairs(glassTempered:GetDescendants()) do
-                            if part:IsA("BasePart") or part:IsA("MeshPart") then
-                                if not originalTempered[part] then
-                                    originalTempered[part] = { Color = part.Color, Material = part.Material }
-                                end
-                                part.Color = Color3.fromRGB(0, 255, 0) -- Neon green
-                                part.Material = Enum.Material.Neon
-                            end
-                        end
-                    elseif DebugLagToggle and DebugLagToggle.CurrentValue then
-                        print("Debug: ChildAdded Step " .. child.Name .. " no tiene glass_tempered tras retries")
-                    end
-                end)
+            if child.Name == "Step" and child:IsA("Model") then
+                task.wait(0.5) -- Espera para que se carguen hijos
+                if glassEspEnabled then
+                    applyToStepEsp(child)
+                    print("Debug: Aplicando ESP a nuevo Step via ChildAdded: " .. child.Name) -- Debug opcional
+                end
             end
         end)
 
-        -- Heartbeat para reaplicar ESP tras resets
+        -- To handle resets/reinits of glasses without lag, use a lightweight heartbeat check every 2 seconds
         local lastCheckTime = 0
-        local checkInterval = 5 -- 5s para bajo impacto
+        local checkInterval = 2 -- Cada 2 segundos para capturar resets rápidos, sin lag
         RunService.Heartbeat:Connect(function()
             if glassEspEnabled and os.clock() - lastCheckTime >= checkInterval then
                 lastCheckTime = os.clock()
-                pcall(function()
-                    applyGlassEsp()
-                    if DebugLagToggle and DebugLagToggle.CurrentValue then
-                        print("Debug Lag: ESP reaplicación tomó " .. (os.clock() - lastCheckTime) * 1000 .. " ms")
-                    end
-                end)
+                originalTempered = {} -- Limpia para forzar coloreo de nuevos parts
+                applyGlassEsp()
+                print("Debug: Reaplicando ESP via Heartbeat") -- Debug opcional
             end
         end)
 
-        -- Aplicar ESP a todos los Steps
-        local function applyGlassEsp()
-            for _, step in ipairs(workspace:GetChildren()) do
-                if step:IsA("Model") and step:FindFirstChild("glass_tempered") then
-                    pcall(function()
-                        local glassTempered = step:FindFirstChild("glass_tempered")
-                        if glassTempered then
-                            for _, part in ipairs(glassTempered:GetDescendants()) do
-                                if part:IsA("BasePart") or part:IsA("MeshPart") then
-                                    if not originalTempered[part] then
-                                        originalTempered[part] = { Color = part.Color, Material = part.Material }
-                                    end
-                                    part.Color = Color3.fromRGB(0, 255, 0) -- Neon green
-                                    part.Material = Enum.Material.Neon
-                                end
+        -- Apply ESP to a single step (Mejorado con retry si glass_tempered no existe aún)
+        local function applyToStepEsp(step)
+            local glassTempered = step:FindFirstChild("glass_tempered")
+            if not glassTempered then
+                task.wait(0.1) -- Retry breve
+                glassTempered = step:FindFirstChild("glass_tempered")
+            end
+            if glassTempered then
+                for _, part in pairs(glassTempered:GetDescendants()) do
+                    if part:IsA("BasePart") or part:IsA("MeshPart") then
+                        if not originalTempered[part] then
+                            originalTempered[part] = { Color = part.Color, Material = part.Material }
+                        end
+                        part.Color = Color3.fromRGB(0, 255, 0) -- Neon green
+                        part.Material = Enum.Material.Neon
+                    end
+                end
+                print("Debug: ESP aplicado a glass_tempered en " .. step.Name) -- Debug opcional
+            end
+        end
+
+        -- Function to destroy detectors and color glass_weak (one-time execution)
+        local function executeCorrectAll()
+            for _, step in pairs(workspace:GetChildren()) do
+                if step.Name == "Step" and step:IsA("Model") then
+                    local glassWeak = step:FindFirstChild("glass_weak")
+                    if glassWeak then
+                        -- Color weak glass parts blue neon
+                        for _, part in pairs(glassWeak:GetDescendants()) do
+                            if part:IsA("BasePart") or part:IsA("MeshPart") then
+                                part.Color = Color3.fromRGB(0, 0, 255) -- Blue
+                                part.Material = Enum.Material.Neon -- Make it neon
                             end
                         end
-                    end)
+                        
+                        -- Destroy detector
+                        local detector = glassWeak:FindFirstChild("Detector")
+                        if detector then
+                            detector:Destroy()
+                        end
+                    end
+                end
+            end
+            Rayfield:Notify({
+                Title = "Success",
+                Content = "glass_weak colored blue neon and detectors destroyed.",
+                Duration = 3,
+                Image = "rbxassetid://4483345998"
+            })
+        end
+
+        -- Apply ESP to all current steps
+        local function applyGlassEsp()
+            for _, step in pairs(workspace:GetChildren()) do
+                if step.Name == "Step" and step:IsA("Model") then
+                    applyToStepEsp(step)
                 end
             end
         end
@@ -138,65 +155,28 @@ else
                     part.Material = props.Material
                 end
             end
-            originalTempered = {}
-        end
-
-        -- Correct All (one-shot)
-        local function executeCorrectAll()
-            local startTime = tick()
-            for _, step in ipairs(workspace:GetChildren()) do
-                if step:IsA("Model") and step:FindFirstChild("glass_weak") then
-                    pcall(function()
-                        local glassWeak = step:FindFirstChild("glass_weak")
-                        if glassWeak then
-                            for _, part in ipairs(glassWeak:GetDescendants()) do
-                                if part:IsA("BasePart") or part:IsA("MeshPart") then
-                                    part.Color = Color3.fromRGB(0, 0, 255) -- Blue
-                                    part.Material = Enum.Material.Neon
-                                end
-                            end
-                            local detector = glassWeak:FindFirstChild("Detector")
-                            if detector then
-                                detector:Destroy()
-                            end
-                        end
-                    end)
-                end
-            end
-            if DebugLagToggle and DebugLagToggle.CurrentValue then
-                print("Debug Lag: Correct All tomó " .. (tick() - startTime) * 1000 .. " ms")
-            end
-            Rayfield:Notify({
-                Title = "Success",
-                Content = "glass_weak colored blue neon and detectors destroyed.",
-                Duration = 3,
-                Image = "rbxassetid://4483345998"
-            })
+            originalTempered = {} -- Clear after reset
         end
 
         -- Toggle ESP
-        local function toggleGlassEsp()
+        function toggleGlassEsp()
             glassEspEnabled = not glassEspEnabled
             if GlassEspToggle then GlassEspToggle:Set(glassEspEnabled) end
             if glassEspEnabled then
-                pcall(function()
-                    applyGlassEsp()
-                end)
+                applyGlassEsp()
                 if espStroke then
-                    espStroke.Color = Color3.fromRGB(0, 255, 0)
+                    espStroke.Color = Color3.fromRGB(0, 255, 0) -- Green borders
                 end
                 Rayfield:Notify({
                     Title = "Success",
-                    Content = "glass_tempered (neon green) enabled (auto-reapply).",
+                    Content = "glass_tempered (neon green) enabled.",
                     Duration = 3,
                     Image = "rbxassetid://4483345998"
                 })
             else
-                pcall(function()
-                    resetGlassEsp()
-                end)
+                resetGlassEsp()
                 if espStroke then
-                    espStroke.Color = Color3.fromRGB(0, 0, 0)
+                    espStroke.Color = Color3.fromRGB(0, 0, 0) -- Black borders
                 end
                 Rayfield:Notify({
                     Title = "Reset",
@@ -207,46 +187,56 @@ else
             end
         end
 
-        -- Floating ESP button
+        -- Function to create the ESP floating draggable button
         local function createFloatingEspButton()
             if floatingEspButton then return end
+
             local screenGui = Instance.new("ScreenGui")
             screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
             screenGui.IgnoreGuiInset = true
-            screenGui.ResetOnSpawn = false
+            screenGui.ResetOnSpawn = false -- Prevent reset on death
+
             floatingEspButton = Instance.new("Frame")
-            floatingEspButton.Size = UDim2.new(0, 50, 0, 50)
+            floatingEspButton.Size = UDim2.new(0, 50, 0, 50) -- Made smaller
             floatingEspButton.Position = UDim2.new(0.4, 0, 0.5, 0)
-            floatingEspButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            floatingEspButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255) -- White background
             floatingEspButton.BorderSizePixel = 0
             floatingEspButton.Parent = screenGui
+
             local uiCorner = Instance.new("UICorner")
-            uiCorner.CornerRadius = UDim.new(1, 0)
+            uiCorner.CornerRadius = UDim.new(1, 0) -- Fully circular
             uiCorner.Parent = floatingEspButton
+
             espStroke = Instance.new("UIStroke")
             espStroke.Thickness = 2
-            espStroke.Color = glassEspEnabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(0, 0, 0)
+            espStroke.Color = glassEspEnabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(0, 0, 0) -- Sync with ESP state
             espStroke.Parent = floatingEspButton
+
             local textLabel = Instance.new("TextLabel")
             textLabel.Size = UDim2.new(1, 0, 1, 0)
             textLabel.BackgroundTransparency = 1
             textLabel.Text = "ESP"
-            textLabel.TextColor3 = Color3.fromRGB(0, 0, 0)
+            textLabel.TextColor3 = Color3.fromRGB(0, 0, 0) -- Black text
             textLabel.TextSize = 14
             textLabel.Font = Enum.Font.SourceSansBold
             textLabel.Parent = floatingEspButton
+
             local button = Instance.new("TextButton")
             button.Size = UDim2.new(1, 0, 1, 0)
             button.BackgroundTransparency = 1
             button.Text = ""
             button.Parent = floatingEspButton
             button.MouseButton1Click:Connect(toggleGlassEsp)
+
+            -- Make it draggable
             local dragging = false
             local dragInput, dragStart, startPos
+
             local function update(input)
                 local delta = input.Position - dragStart
                 floatingEspButton.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
             end
+
             button.InputBegan:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                     dragging = true
@@ -259,11 +249,13 @@ else
                     end)
                 end
             end)
+
             button.InputChanged:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
                     dragInput = input
                 end
             end)
+
             UserInputService.InputChanged:Connect(function(input)
                 if input == dragInput and dragging then
                     update(input)
@@ -271,34 +263,40 @@ else
             end)
         end
 
-        -- Floating Correct All button
+        -- Function to create the Correct All floating draggable button (one-time execution)
         local function createFloatingCorrectButton()
             if floatingCorrectButton then return end
+
             local screenGui = Instance.new("ScreenGui")
             screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
             screenGui.IgnoreGuiInset = true
-            screenGui.ResetOnSpawn = false
+            screenGui.ResetOnSpawn = false -- Prevent reset on death
+
             floatingCorrectButton = Instance.new("Frame")
             floatingCorrectButton.Size = UDim2.new(0, 50, 0, 50)
             floatingCorrectButton.Position = UDim2.new(0.6, 0, 0.5, 0)
-            floatingCorrectButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            floatingCorrectButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255) -- White background
             floatingCorrectButton.BorderSizePixel = 0
             floatingCorrectButton.Parent = screenGui
+
             local uiCorner = Instance.new("UICorner")
-            uiCorner.CornerRadius = UDim.new(1, 0)
+            uiCorner.CornerRadius = UDim.new(1, 0) -- Fully circular
             uiCorner.Parent = floatingCorrectButton
+
             correctStroke = Instance.new("UIStroke")
             correctStroke.Thickness = 2
-            correctStroke.Color = Color3.fromRGB(0, 0, 0)
+            correctStroke.Color = Color3.fromRGB(0, 0, 0) -- Start black
             correctStroke.Parent = floatingCorrectButton
+
             local textLabel = Instance.new("TextLabel")
             textLabel.Size = UDim2.new(1, 0, 1, 0)
             textLabel.BackgroundTransparency = 1
             textLabel.Text = "ALL"
-            textLabel.TextColor3 = Color3.fromRGB(0, 0, 0)
+            textLabel.TextColor3 = Color3.fromRGB(0, 0, 0) -- Black text
             textLabel.TextSize = 14
             textLabel.Font = Enum.Font.SourceSansBold
             textLabel.Parent = floatingCorrectButton
+
             local button = Instance.new("TextButton")
             button.Size = UDim2.new(1, 0, 1, 0)
             button.BackgroundTransparency = 1
@@ -306,16 +304,20 @@ else
             button.Parent = floatingCorrectButton
             button.MouseButton1Click:Connect(function()
                 executeCorrectAll()
-                correctStroke.Color = Color3.fromRGB(0, 255, 0)
+                correctStroke.Color = Color3.fromRGB(0, 255, 0) -- Green for 500ms
                 task.wait(0.5)
-                correctStroke.Color = Color3.fromRGB(0, 0, 0)
+                correctStroke.Color = Color3.fromRGB(0, 0, 0) -- Back to black
             end)
+
+            -- Make it draggable (same as ESP)
             local dragging = false
             local dragInput, dragStart, startPos
+
             local function update(input)
                 local delta = input.Position - dragStart
                 floatingCorrectButton.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
             end
+
             button.InputBegan:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                     dragging = true
@@ -328,11 +330,13 @@ else
                     end)
                 end
             end)
+
             button.InputChanged:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
                     dragInput = input
                 end
             end)
+
             UserInputService.InputChanged:Connect(function(input)
                 if input == dragInput and dragging then
                     update(input)
@@ -340,7 +344,7 @@ else
             end)
         end
 
-        -- Destroy functions
+        -- Function to destroy the floating ESP button
         local function destroyFloatingEspButton()
             if floatingEspButton then
                 floatingEspButton.Parent:Destroy()
@@ -349,6 +353,7 @@ else
             end
         end
 
+        -- Function to destroy the floating Correct All button
         local function destroyFloatingCorrectButton()
             if floatingCorrectButton then
                 floatingCorrectButton.Parent:Destroy()
@@ -357,19 +362,22 @@ else
             end
         end
 
-        -- Recreate on respawn
+        -- Recreate floating buttons on character respawn
         LocalPlayer.CharacterAdded:Connect(function()
+            -- Wait a bit for the game to stabilize
             task.wait(2)
+            
+            -- Recreate buttons if they were enabled
             if floatingEspButtonToggle and floatingEspButtonToggle.CurrentValue then
                 createFloatingEspButton()
             end
             if floatingCorrectButtonToggle and floatingCorrectButtonToggle.CurrentValue then
                 createFloatingCorrectButton()
             end
+            
+            -- Reapply ESP if enabled
             if glassEspEnabled then
-                pcall(function()
-                    applyGlassEsp()
-                end)
+                applyGlassEsp()
             end
         end)
 
@@ -382,7 +390,29 @@ else
             Flag = "Glass_ESP",
             Callback = function(v)
                 glassEspEnabled = v
-                toggleGlassEsp()
+                if v then
+                    applyGlassEsp()
+                    if espStroke then
+                        espStroke.Color = Color3.fromRGB(0, 255, 0)
+                    end
+                    Rayfield:Notify({
+                        Title = "Success",
+                        Content = "glass_tempered (neon green) enabled.",
+                        Duration = 3,
+                        Image = "rbxassetid://4483345998"
+                    })
+                else
+                    resetGlassEsp()
+                    if espStroke then
+                        espStroke.Color = Color3.fromRGB(0, 0, 0)
+                    end
+                    Rayfield:Notify({
+                        Title = "Reset",
+                        Content = "glass_tempered reset to original colors.",
+                        Duration = 3,
+                        Image = "rbxassetid://4483345998"
+                    })
+                end
             end,
         })
 
@@ -392,16 +422,8 @@ else
             Callback = executeCorrectAll
         })
 
-        TabMain:CreateSection("Debug")
-        DebugLagToggle = TabMain:CreateToggle({
-            Name = "Debug Lag (Console Times)",
-            CurrentValue = false,
-            Flag = "Debug_Lag",
-            Callback = function() end
-        })
-
         TabMain:CreateSection("Configuration")
-        TabMain:CreateLabel("Settings save manually. Simple, crash-proof, auto-reapply ESP.")
+        TabMain:CreateLabel("Settings save manually in-game.")
 
         -- ================= TAB: MOBILE =================
         local TabMobile = Window:CreateTab("Mobile", "smartphone")
@@ -413,10 +435,20 @@ else
             Callback = function(v)
                 if v then
                     createFloatingEspButton()
-                    Rayfield:Notify({ Title = "Success", Content = "ESP floating button enabled.", Duration = 3, Image = "rbxassetid://4483345998" })
+                    Rayfield:Notify({
+                        Title = "Success",
+                        Content = "ESP floating button enabled.",
+                        Duration = 3,
+                        Image = "rbxassetid://4483345998"
+                    })
                 else
                     destroyFloatingEspButton()
-                    Rayfield:Notify({ Title = "Success", Content = "ESP floating button disabled.", Duration = 3, Image = "rbxassetid://4483345998" })
+                    Rayfield:Notify({
+                        Title = "Success",
+                        Content = "ESP floating button disabled.",
+                        Duration = 3,
+                        Image = "rbxassetid://4483345998"
+                    })
                 end
             end,
         })
@@ -428,10 +460,20 @@ else
             Callback = function(v)
                 if v then
                     createFloatingCorrectButton()
-                    Rayfield:Notify({ Title = "Success", Content = "Correct All floating button enabled.", Duration = 3, Image = "rbxassetid://4483345998" })
+                    Rayfield:Notify({
+                        Title = "Success",
+                        Content = "Correct All floating button enabled.",
+                        Duration = 3,
+                        Image = "rbxassetid://4483345998"
+                    })
                 else
                     destroyFloatingCorrectButton()
-                    Rayfield:Notify({ Title = "Success", Content = "Correct All floating button disabled.", Duration = 3, Image = "rbxassetid://4483345998" })
+                    Rayfield:Notify({
+                        Title = "Success",
+                        Content = "Correct All floating button disabled.",
+                        Duration = 3,
+                        Image = "rbxassetid://4483345998"
+                    })
                 end
             end,
         })
@@ -459,7 +501,7 @@ else
         -- ================== CREDITS ==================
         local TabCredits = Window:CreateTab("Credits", "award")
         TabCredits:CreateSection("Script Information")
-        TabCredits:CreateLabel("Glass Color Menu | Made by Estardax ⚡ (Simple Edition)")
+        TabCredits:CreateLabel("Glass Color Menu | Made by Estardax ⚡")
         TabCredits:CreateLabel("UI powered by Rayfield Library")
         TabCredits:CreateLabel("Scriptax HUB - Advanced Glass Bridge Tools")
 

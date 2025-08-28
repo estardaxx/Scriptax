@@ -55,28 +55,37 @@ else
 
         -- ================== SHARED VARS ==================
         local glassEspEnabled = false
-        local correctAllEnabled = false
+        local infJumpEnabled = false
         local originalTempered = {} -- [part] = {Color=..., Material=...}
-        local originalWeak = {} -- [part] = {Color=..., Material=...}
-        local hiddenDetectors = {} -- [detector] = {CFrame=...}  -- Cambiado para mover en lugar de ocultar
         local GlassEspToggle = nil -- Reference to Glass ESP toggle
-        local CorrectAllToggle = nil -- Reference to Correct All toggle
+        local InfJumpToggle = nil -- Reference to Inf Jump toggle
         local floatingEspButton = nil -- Reference to the ESP floating button UI
         local floatingCorrectButton = nil -- Reference to the Correct All floating button UI
+        local floatingInfJumpButton = nil -- Reference to the Inf Jump floating button UI
         local floatingEspButtonToggle = nil -- Reference to the ESP mobile toggle
         local floatingCorrectButtonToggle = nil -- Reference to the Correct All mobile toggle
+        local floatingInfJumpButtonToggle = nil -- Reference to the Inf Jump mobile toggle
         local espStroke = nil -- Reference to the ESP UIStroke for borders
         local correctStroke = nil -- Reference to the Correct All UIStroke for borders
+        local infJumpStroke = nil -- Reference to the Inf Jump UIStroke for borders
+        local infJumpConnection = nil -- Connection for inf jump
         
-        -- ChildAdded connection for dynamic steps
+        -- ChildAdded connection for dynamic steps (for ESP)
         local childAddedConnection = workspace.ChildAdded:Connect(function(child)
             if child.Name == "Step" and child:IsA("Model") then
                 if glassEspEnabled then
                     applyToStepEsp(child)
                 end
-                if correctAllEnabled then
-                    applyToStepCorrect(child)
-                end
+            end
+        end)
+
+        -- To handle resets/reinits of glasses without lag, use a lightweight heartbeat check every few seconds
+        local lastCheckTime = 0
+        local checkInterval = 5 -- Check every 5 seconds to avoid lag
+        RunService.Heartbeat:Connect(function()
+            if glassEspEnabled and tick() - lastCheckTime >= checkInterval then
+                lastCheckTime = tick()
+                applyGlassEsp() -- Reapply to all current steps if needed
             end
         end)
 
@@ -96,29 +105,34 @@ else
             end
         end
 
-        -- Apply Correct All to a single step (Cambiado: Mover detector en lugar de ocultar)
-        local function applyToStepCorrect(step)
-            local glassWeak = step:FindFirstChild("glass_weak")
-            if glassWeak then
-                -- Color weak glass parts blue neon
-                for _, part in pairs(glassWeak:GetDescendants()) do
-                    if part:IsA("BasePart") or part:IsA("MeshPart") then
-                        if not originalWeak[part] then
-                            originalWeak[part] = { Color = part.Color, Material = part.Material }
+        -- Function to destroy detectors and color glass_weak (one-time execution)
+        local function executeCorrectAll()
+            for _, step in pairs(workspace:GetChildren()) do
+                if step.Name == "Step" and step:IsA("Model") then
+                    local glassWeak = step:FindFirstChild("glass_weak")
+                    if glassWeak then
+                        -- Color weak glass parts blue neon
+                        for _, part in pairs(glassWeak:GetDescendants()) do
+                            if part:IsA("BasePart") or part:IsA("MeshPart") then
+                                part.Color = Color3.fromRGB(0, 0, 255) -- Blue
+                                part.Material = Enum.Material.Neon -- Make it neon
+                            end
                         end
-                        part.Color = Color3.fromRGB(0, 0, 255) -- Blue
-                        part.Material = Enum.Material.Neon -- Make it neon
+                        
+                        -- Destroy detector
+                        local detector = glassWeak:FindFirstChild("Detector")
+                        if detector then
+                            detector:Destroy()
+                        end
                     end
                 end
-                
-                -- Mover detector a un lugar lejano
-                local detector = glassWeak:FindFirstChild("Detector")
-                if detector and detector:IsA("BasePart") and not hiddenDetectors[detector] then
-                    hiddenDetectors[detector] = { CFrame = detector.CFrame }
-                    detector.CFrame = CFrame.new(0, -10000, 0)  -- Mover lejos (ajusta si necesitas)
-                    print("Debug: Detector movido para glass_weak en step: " .. step.Name)  -- Debug opcional
-                end
             end
+            Rayfield:Notify({
+                Title = "Success",
+                Content = "glass_weak colored blue neon and detectors destroyed.",
+                Duration = 3,
+                Image = "rbxassetid://4483345998"
+            })
         end
 
         -- Apply ESP to all current steps
@@ -126,15 +140,6 @@ else
             for _, step in pairs(workspace:GetChildren()) do
                 if step.Name == "Step" and step:IsA("Model") then
                     applyToStepEsp(step)
-                end
-            end
-        end
-
-        -- Apply Correct All to all current steps
-        local function applyCorrectAll()
-            for _, step in pairs(workspace:GetChildren()) do
-                if step.Name == "Step" and step:IsA("Model") then
-                    applyToStepCorrect(step)
                 end
             end
         end
@@ -148,27 +153,6 @@ else
                 end
             end
             originalTempered = {} -- Clear after reset
-        end
-
-        -- Reset Correct All (Cambiado: Restaurar posición del detector)
-        local function resetCorrectAll()
-            -- Restore detectors positions
-            for detector, props in pairs(hiddenDetectors) do
-                if detector and detector:IsDescendantOf(workspace) then
-                    detector.CFrame = props.CFrame
-                    print("Debug: Detector restaurado para: " .. detector.Parent.Name)  -- Debug opcional
-                end
-            end
-            hiddenDetectors = {} -- Clear the table
-            
-            -- Reset colors
-            for part, props in pairs(originalWeak) do
-                if part and part:IsDescendantOf(workspace) then
-                    part.Color = props.Color
-                    part.Material = props.Material
-                end
-            end
-            originalWeak = {} -- Clear after reset
         end
 
         -- Toggle ESP
@@ -200,29 +184,37 @@ else
             end
         end
 
-        -- Toggle Correct All (Actualizado notificación para reflejar cambio)
-        function toggleCorrectAll()
-            correctAllEnabled = not correctAllEnabled
-            if CorrectAllToggle then CorrectAllToggle:Set(correctAllEnabled) end
-            if correctAllEnabled then
-                applyCorrectAll()
-                if correctStroke then
-                    correctStroke.Color = Color3.fromRGB(0, 255, 0) -- Green borders
+        -- Toggle Inf Jump
+        function toggleInfJump()
+            infJumpEnabled = not infJumpEnabled
+            if InfJumpToggle then InfJumpToggle:Set(infJumpEnabled) end
+            if infJumpEnabled then
+                if infJumpConnection then infJumpConnection:Disconnect() end
+                infJumpConnection = UserInputService.JumpRequest:Connect(function()
+                    if LocalPlayer.Character then
+                        LocalPlayer.Character:FindFirstChildOfClass('Humanoid'):ChangeState("Jumping")
+                    end
+                end)
+                if infJumpStroke then
+                    infJumpStroke.Color = Color3.fromRGB(0, 255, 0) -- Green borders
                 end
                 Rayfield:Notify({
                     Title = "Success",
-                    Content = "glass_weak (blue neon) enabled and detectors moved away.",
+                    Content = "Infinite Jump enabled.",
                     Duration = 3,
                     Image = "rbxassetid://4483345998"
                 })
             else
-                resetCorrectAll()
-                if correctStroke then
-                    correctStroke.Color = Color3.fromRGB(0, 0, 0) -- Black borders
+                if infJumpConnection then
+                    infJumpConnection:Disconnect()
+                    infJumpConnection = nil
+                end
+                if infJumpStroke then
+                    infJumpStroke.Color = Color3.fromRGB(0, 0, 0) -- Black borders
                 end
                 Rayfield:Notify({
                     Title = "Reset",
-                    Content = "glass_weak reset and detectors restored to position.",
+                    Content = "Infinite Jump disabled.",
                     Duration = 3,
                     Image = "rbxassetid://4483345998"
                 })
@@ -305,7 +297,7 @@ else
             end)
         end
 
-        -- Function to create the Correct All floating draggable button
+        -- Function to create the Correct All floating draggable button (one-time execution)
         local function createFloatingCorrectButton()
             if floatingCorrectButton then return end
 
@@ -315,7 +307,7 @@ else
             screenGui.ResetOnSpawn = false -- Prevent reset on death
 
             floatingCorrectButton = Instance.new("Frame")
-            floatingCorrectButton.Size = UDim2.new(0, 50, 0, 50) -- Made smaller and same size as ESP
+            floatingCorrectButton.Size = UDim2.new(0, 50, 0, 50)
             floatingCorrectButton.Position = UDim2.new(0.6, 0, 0.5, 0)
             floatingCorrectButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255) -- White background
             floatingCorrectButton.BorderSizePixel = 0
@@ -327,7 +319,7 @@ else
 
             correctStroke = Instance.new("UIStroke")
             correctStroke.Thickness = 2
-            correctStroke.Color = correctAllEnabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(0, 0, 0) -- Green borders like ESP
+            correctStroke.Color = Color3.fromRGB(0, 0, 0) -- Start black
             correctStroke.Parent = floatingCorrectButton
 
             local textLabel = Instance.new("TextLabel")
@@ -335,8 +327,8 @@ else
             textLabel.BackgroundTransparency = 1
             textLabel.Text = "ALL"
             textLabel.TextColor3 = Color3.fromRGB(0, 0, 0) -- Black text
-            textLabel.TextSize = 14 -- Same size as ESP
-            textLabel.Font = Enum.Font.SourceSansBold -- Same font as ESP
+            textLabel.TextSize = 14
+            textLabel.Font = Enum.Font.SourceSansBold
             textLabel.Parent = floatingCorrectButton
 
             local button = Instance.new("TextButton")
@@ -344,7 +336,12 @@ else
             button.BackgroundTransparency = 1
             button.Text = ""
             button.Parent = floatingCorrectButton
-            button.MouseButton1Click:Connect(toggleCorrectAll)
+            button.MouseButton1Click:Connect(function()
+                executeCorrectAll()
+                correctStroke.Color = Color3.fromRGB(0, 255, 0) -- Green for 500ms
+                task.wait(0.5)
+                correctStroke.Color = Color3.fromRGB(0, 0, 0) -- Back to black
+            end)
 
             -- Make it draggable (same as ESP)
             local dragging = false
@@ -360,6 +357,82 @@ else
                     dragging = true
                     dragStart = input.Position
                     startPos = floatingCorrectButton.Position
+                    input.Changed:Connect(function()
+                        if input.UserInputState == Enum.UserInputState.End then
+                            dragging = false
+                        end
+                    end)
+                end
+            end)
+
+            button.InputChanged:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+                    dragInput = input
+                end
+            end)
+
+            UserInputService.InputChanged:Connect(function(input)
+                if input == dragInput and dragging then
+                    update(input)
+                end
+            end)
+        end
+
+        -- Function to create the Inf Jump floating draggable button
+        local function createFloatingInfJumpButton()
+            if floatingInfJumpButton then return end
+
+            local screenGui = Instance.new("ScreenGui")
+            screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+            screenGui.IgnoreGuiInset = true
+            screenGui.ResetOnSpawn = false -- Prevent reset on death
+
+            floatingInfJumpButton = Instance.new("Frame")
+            floatingInfJumpButton.Size = UDim2.new(0, 50, 0, 50)
+            floatingInfJumpButton.Position = UDim2.new(0.5, 0, 0.5, 0)
+            floatingInfJumpButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255) -- White background
+            floatingInfJumpButton.BorderSizePixel = 0
+            floatingInfJumpButton.Parent = screenGui
+
+            local uiCorner = Instance.new("UICorner")
+            uiCorner.CornerRadius = UDim.new(1, 0) -- Fully circular
+            uiCorner.Parent = floatingInfJumpButton
+
+            infJumpStroke = Instance.new("UIStroke")
+            infJumpStroke.Thickness = 2
+            infJumpStroke.Color = infJumpEnabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(0, 0, 0) -- Sync with state
+            infJumpStroke.Parent = floatingInfJumpButton
+
+            local textLabel = Instance.new("TextLabel")
+            textLabel.Size = UDim2.new(1, 0, 1, 0)
+            textLabel.BackgroundTransparency = 1
+            textLabel.Text = "INF"
+            textLabel.TextColor3 = Color3.fromRGB(0, 0, 0) -- Black text
+            textLabel.TextSize = 14
+            textLabel.Font = Enum.Font.SourceSansBold
+            textLabel.Parent = floatingInfJumpButton
+
+            local button = Instance.new("TextButton")
+            button.Size = UDim2.new(1, 0, 1, 0)
+            button.BackgroundTransparency = 1
+            button.Text = ""
+            button.Parent = floatingInfJumpButton
+            button.MouseButton1Click:Connect(toggleInfJump)
+
+            -- Make it draggable (same as others)
+            local dragging = false
+            local dragInput, dragStart, startPos
+
+            local function update(input)
+                local delta = input.Position - dragStart
+                floatingInfJumpButton.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            end
+
+            button.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    dragging = true
+                    dragStart = input.Position
+                    startPos = floatingInfJumpButton.Position
                     input.Changed:Connect(function()
                         if input.UserInputState == Enum.UserInputState.End then
                             dragging = false
@@ -399,6 +472,15 @@ else
             end
         end
 
+        -- Function to destroy the floating Inf Jump button
+        local function destroyFloatingInfJumpButton()
+            if floatingInfJumpButton then
+                floatingInfJumpButton.Parent:Destroy()
+                floatingInfJumpButton = nil
+                infJumpStroke = nil
+            end
+        end
+
         -- Recreate floating buttons on character respawn
         LocalPlayer.CharacterAdded:Connect(function()
             -- Wait a bit for the game to stabilize
@@ -411,13 +493,13 @@ else
             if floatingCorrectButtonToggle and floatingCorrectButtonToggle.CurrentValue then
                 createFloatingCorrectButton()
             end
+            if floatingInfJumpButtonToggle and floatingInfJumpButtonToggle.CurrentValue then
+                createFloatingInfJumpButton()
+            end
             
-            -- Reapply if needed (ChildAdded handles new, but reapply to existing if any changes)
+            -- Reapply ESP if enabled
             if glassEspEnabled then
                 applyGlassEsp()
-            end
-            if correctAllEnabled then
-                applyCorrectAll()
             end
         end)
 
@@ -457,36 +539,20 @@ else
         })
 
         TabMain:CreateSection("Correct All")
-        CorrectAllToggle = TabMain:CreateToggle({
-            Name = "Correct All Glass",
+        TabMain:CreateButton({
+            Name = "Execute Correct All",
+            Callback = executeCorrectAll
+        })
+
+        TabMain:CreateSection("Other Features")
+        InfJumpToggle = TabMain:CreateToggle({
+            Name = "Infinite Jump",
             CurrentValue = false,
-            Flag = "Correct_All",
+            Flag = "Inf_Jump",
             Callback = function(v)
-                correctAllEnabled = v
-                if v then
-                    applyCorrectAll()
-                    if correctStroke then
-                        correctStroke.Color = Color3.fromRGB(0, 255, 0)
-                    end
-                    Rayfield:Notify({
-                        Title = "Success",
-                        Content = "glass_weak (blue neon) enabled and detectors moved away.",
-                        Duration = 3,
-                        Image = "rbxassetid://4483345998"
-                    })
-                else
-                    resetCorrectAll()
-                    if correctStroke then
-                        correctStroke.Color = Color3.fromRGB(0, 0, 0)
-                    end
-                    Rayfield:Notify({
-                        Title = "Reset",
-                        Content = "glass_weak reset and detectors restored to position.",
-                        Duration = 3,
-                        Image = "rbxassetid://4483345998"
-                    })
-                end
-            end
+                infJumpEnabled = v
+                toggleInfJump()
+            end,
         })
 
         TabMain:CreateSection("Configuration")
@@ -545,6 +611,31 @@ else
             end,
         })
 
+        floatingInfJumpButtonToggle = TabMobile:CreateToggle({
+            Name = "Inf Jump Button",
+            CurrentValue = false,
+            Flag = "Floating_InfJump_Button",
+            Callback = function(v)
+                if v then
+                    createFloatingInfJumpButton()
+                    Rayfield:Notify({
+                        Title = "Success",
+                        Content = "Inf Jump floating button enabled.",
+                        Duration = 3,
+                        Image = "rbxassetid://4483345998"
+                    })
+                else
+                    destroyFloatingInfJumpButton()
+                    Rayfield:Notify({
+                        Title = "Success",
+                        Content = "Inf Jump floating button disabled.",
+                        Duration = 3,
+                        Image = "rbxassetid://4483345998"
+                    })
+                end
+            end,
+        })
+
         -- ================= TAB: KEYBINDS =================
         local TabKeys = Window:CreateTab("Keybinds", "keyboard")
         TabKeys:CreateSection("Custom Keybinds")
@@ -556,14 +647,21 @@ else
             Callback = toggleGlassEsp
         })
         TabKeys:CreateKeybind({
-            Name = "Toggle Correct All",
+            Name = "Execute Correct All",
             CurrentKeybind = "R",
             HoldToInteract = false,
             Flag = "Keybind_CorrectAll",
-            Callback = toggleCorrectAll
+            Callback = executeCorrectAll
+        })
+        TabKeys:CreateKeybind({
+            Name = "Toggle Inf Jump",
+            CurrentKeybind = "F",
+            HoldToInteract = false,
+            Flag = "Keybind_InfJump",
+            Callback = toggleInfJump
         })
         TabKeys:CreateLabel("Press G to open/close the menu")
-        TabKeys:CreateLabel("Default: E for Glass ESP, R for Correct All")
+        TabKeys:CreateLabel("Default: E for Glass ESP, R for Correct All, F for Inf Jump")
 
         -- ================== CREDITS ==================
         local TabCredits = Window:CreateTab("Credits", "award")

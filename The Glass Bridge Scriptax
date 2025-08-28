@@ -6,26 +6,30 @@ end)
 -- Check if Rayfield loaded successfully
 if not success or not Rayfield then
     warn("Failed to load Rayfield from https://sirius.menu/rayfield. Running script without UI.")
-    -- Fallback script without UI
-    for _, step in pairs(workspace:GetChildren()) do
-        if step.Name == "Step" and step:IsA("Model") then
-            local glassTempered = step:FindFirstChild("glass_tempered")
-            if glassTempered then
-                for _, part in pairs(glassTempered:GetDescendants()) do
-                    if part:IsA("BasePart") or part:IsA("MeshPart") then
-                        part.Color = Color3.fromRGB(0, 255, 0) -- Neon green
-                        part.Material = Enum.Material.Neon
-                    end
+    -- Fallback script without UI (optimizado: cache simple)
+    local cachedSteps = {workspace.Step} -- Incluye workspace.Step explícitamente
+    for _, step in ipairs(workspace:GetChildren()) do
+        if step:IsA("Model") and (step:FindFirstChild("glass_tempered") or step.Name == "Step") then
+            table.insert(cachedSteps, step)
+        end
+    end
+    for _, step in ipairs(cachedSteps) do
+        local glassTempered = step:FindFirstChild("glass_tempered")
+        if glassTempered then
+            for _, part in ipairs(glassTempered:GetDescendants()) do
+                if part:IsA("BasePart") or part:IsA("MeshPart") then
+                    part.Color = Color3.fromRGB(0, 255, 0) -- Neon green
+                    part.Material = Enum.Material.Neon
                 end
             end
         end
     end
-    print("Coloring completed: glass_tempered (neon green).")
+    print("Coloring completed: glass_tempered (neon green) via cache.")
 else
     -- Show decorative notification on script start
     Rayfield:Notify({
         Title = "Scriptax HUB",
-        Content = "Welcome to Scriptax HUB! Glass Color Menu loaded successfully.",
+        Content = "Welcome to Scriptax HUB! Glass Color Menu loaded successfully (optimized for ~18 Steps).",
         Duration = 4,
         Image = "rbxassetid://4483345998"
     })
@@ -55,93 +59,149 @@ else
 
         -- ================== SHARED VARS ==================
         local glassEspEnabled = false
-        local infJumpEnabled = false
         local originalTempered = {} -- [part] = {Color=..., Material=...}
+        local cachedSteps = {workspace.Step} -- Cache inicial con workspace.Step
+        local cachedTemperedParts = {} -- Sub-cache de parts para ESP
         local GlassEspToggle = nil -- Reference to Glass ESP toggle
-        local InfJumpToggle = nil -- Reference to Inf Jump toggle
+        local DebugLagToggle = nil -- Opcional: Para medir lag
         local floatingEspButton = nil -- Reference to the ESP floating button UI
         local floatingCorrectButton = nil -- Reference to the Correct All floating button UI
-        local floatingInfJumpButton = nil -- Reference to the Inf Jump floating button UI
         local floatingEspButtonToggle = nil -- Reference to the ESP mobile toggle
         local floatingCorrectButtonToggle = nil -- Reference to the Correct All mobile toggle
-        local floatingInfJumpButtonToggle = nil -- Reference to the Inf Jump mobile toggle
         local espStroke = nil -- Reference to the ESP UIStroke for borders
         local correctStroke = nil -- Reference to the Correct All UIStroke for borders
-        local infJumpStroke = nil -- Reference to the Inf Jump UIStroke for borders
-        local infJumpConnection = nil -- Connection for inf jump
         
-        -- ChildAdded connection for dynamic steps (for ESP)
+        -- ChildAdded connection for dynamic steps (optimizado: solo Steps relevantes)
         local childAddedConnection = workspace.ChildAdded:Connect(function(child)
-            if child.Name == "Step" and child:IsA("Model") then
+            if child:IsA("Model") and (child:FindFirstChild("glass_tempered") or child.Name == "Step") then
+                task.wait(0.5) -- Espera para carga
                 if glassEspEnabled then
-                    applyToStepEsp(child)
+                    cacheAndApplyToStepEsp(child)
                 end
             end
         end)
 
-        -- To handle resets/reinits of glasses without lag, use a lightweight heartbeat check every few seconds
+        -- Heartbeat optimizado: Chequea cada 3.5s, solo si cache cambió
         local lastCheckTime = 0
-        local checkInterval = 5 -- Check every 5 seconds to avoid lag
+        local checkInterval = 3.5 -- Balance entre rapidez y bajo impacto
+        local previousStepCount = 0
         RunService.Heartbeat:Connect(function()
-            if glassEspEnabled and tick() - lastCheckTime >= checkInterval then
-                lastCheckTime = tick()
-                applyGlassEsp() -- Reapply to all current steps if needed
+            if glassEspEnabled and os.clock() - lastCheckTime >= checkInterval then
+                lastCheckTime = os.clock()
+                local currentCount = #cachedSteps
+                if currentCount ~= previousStepCount then
+                    previousStepCount = currentCount
+                    updateEspCache()
+                    if DebugLagToggle and DebugLagToggle.CurrentValue then
+                        local startTime = os.clock()
+                        applyCachedEsp()
+                        print("Debug Lag: ESP reaplicación tomó " .. (os.clock() - startTime) * 1000 .. " ms")
+                    else
+                        applyCachedEsp()
+                    end
+                end
             end
         end)
 
-        -- Apply ESP to a single step
-        local function applyToStepEsp(step)
+        -- Función para cachear y aplicar ESP a un Step
+        local function cacheAndApplyToStepEsp(step)
+            local stepIndex = #cachedSteps + 1
+            cachedSteps[stepIndex] = step
             local glassTempered = step:FindFirstChild("glass_tempered")
+            if not glassTempered then
+                task.wait(0.1)
+                glassTempered = step:FindFirstChild("glass_tempered")
+            end
             if glassTempered then
-                for _, part in pairs(glassTempered:GetDescendants()) do
+                local parts = {}
+                cachedTemperedParts[stepIndex] = parts
+                for _, part in ipairs(glassTempered:GetDescendants()) do
                     if part:IsA("BasePart") or part:IsA("MeshPart") then
                         if not originalTempered[part] then
                             originalTempered[part] = { Color = part.Color, Material = part.Material }
                         end
                         part.Color = Color3.fromRGB(0, 255, 0) -- Neon green
                         part.Material = Enum.Material.Neon
+                        table.insert(parts, part)
                     end
                 end
             end
         end
 
-        -- Function to destroy detectors and color glass_weak (one-time execution)
-        local function executeCorrectAll()
-            for _, step in pairs(workspace:GetChildren()) do
-                if step.Name == "Step" and step:IsA("Model") then
-                    local glassWeak = step:FindFirstChild("glass_weak")
-                    if glassWeak then
-                        -- Color weak glass parts blue neon
-                        for _, part in pairs(glassWeak:GetDescendants()) do
-                            if part:IsA("BasePart") or part:IsA("MeshPart") then
-                                part.Color = Color3.fromRGB(0, 0, 255) -- Blue
-                                part.Material = Enum.Material.Neon -- Make it neon
-                            end
-                        end
-                        
-                        -- Destroy detector
-                        local detector = glassWeak:FindFirstChild("Detector")
-                        if detector then
-                            detector:Destroy()
-                        end
+        -- Actualiza cache completo (solo al inicio o si detecta cambios)
+        local function updateEspCache()
+            cachedSteps = {workspace.Step} -- Siempre incluye workspace.Step
+            cachedTemperedParts = {}
+            for _, step in ipairs(workspace:GetChildren()) do
+                if step:IsA("Model") and (step:FindFirstChild("glass_tempered") or step.Name == "Step") then
+                    if step ~= workspace.Step then -- Evita duplicar
+                        table.insert(cachedSteps, step)
                     end
                 end
+            end
+            for i, step in ipairs(cachedSteps) do
+                if step and step:IsDescendantOf(workspace) then
+                    cacheAndApplyToStepEsp(step)
+                end
+            end
+        end
+
+        -- Aplica ESP solo a parts cacheadas
+        local function applyCachedEsp()
+            for i, parts in ipairs(cachedTemperedParts) do
+                local step = cachedSteps[i]
+                if step and step:IsDescendantOf(workspace) then
+                    for _, part in ipairs(parts) do
+                        if part and part:IsDescendantOf(workspace) then
+                            if not originalTempered[part] then
+                                originalTempered[part] = { Color = part.Color, Material = part.Material }
+                            end
+                            part.Color = Color3.fromRGB(0, 255, 0)
+                            part.Material = Enum.Material.Neon
+                        end
+                    end
+                else
+                    cachedSteps[i] = nil
+                    cachedTemperedParts[i] = nil
+                end
+            end
+        end
+
+        -- Correct All (optimizado con cache one-time)
+        local function executeCorrectAll()
+            local startTime = tick()
+            local tempSteps = {workspace.Step}
+            for _, step in ipairs(workspace:GetChildren()) do
+                if step:IsA("Model") and step:FindFirstChild("glass_weak") then
+                    if step ~= workspace.Step then
+                        table.insert(tempSteps, step)
+                    end
+                end
+            end
+            for _, step in ipairs(tempSteps) do
+                local glassWeak = step:FindFirstChild("glass_weak")
+                if glassWeak then
+                    for _, part in ipairs(glassWeak:GetDescendants()) do
+                        if part:IsA("BasePart") or part:IsA("MeshPart") then
+                            part.Color = Color3.fromRGB(0, 0, 255) -- Blue
+                            part.Material = Enum.Material.Neon
+                        end
+                    end
+                    local detector = glassWeak:FindFirstChild("Detector")
+                    if detector then
+                        detector:Destroy()
+                    end
+                end
+            end
+            if DebugLagToggle and DebugLagToggle.CurrentValue then
+                print("Debug Lag: Correct All tomó " .. (tick() - startTime) * 1000 .. " ms para " .. #tempSteps .. " steps")
             end
             Rayfield:Notify({
                 Title = "Success",
-                Content = "glass_weak colored blue neon and detectors destroyed.",
+                Content = "glass_weak colored blue neon and detectors destroyed (low lag mode).",
                 Duration = 3,
                 Image = "rbxassetid://4483345998"
             })
-        end
-
-        -- Apply ESP to all current steps
-        local function applyGlassEsp()
-            for _, step in pairs(workspace:GetChildren()) do
-                if step.Name == "Step" and step:IsA("Model") then
-                    applyToStepEsp(step)
-                end
-            end
         end
 
         -- Reset ESP
@@ -152,7 +212,9 @@ else
                     part.Material = props.Material
                 end
             end
-            originalTempered = {} -- Clear after reset
+            originalTempered = {}
+            cachedSteps = {workspace.Step}
+            cachedTemperedParts = {}
         end
 
         -- Toggle ESP
@@ -160,20 +222,21 @@ else
             glassEspEnabled = not glassEspEnabled
             if GlassEspToggle then GlassEspToggle:Set(glassEspEnabled) end
             if glassEspEnabled then
-                applyGlassEsp()
+                updateEspCache()
+                applyCachedEsp()
                 if espStroke then
-                    espStroke.Color = Color3.fromRGB(0, 255, 0) -- Green borders
+                    espStroke.Color = Color3.fromRGB(0, 255, 0)
                 end
                 Rayfield:Notify({
                     Title = "Success",
-                    Content = "glass_tempered (neon green) enabled.",
+                    Content = "glass_tempered (neon green) enabled (optimized for ~18 Steps).",
                     Duration = 3,
                     Image = "rbxassetid://4483345998"
                 })
             else
                 resetGlassEsp()
                 if espStroke then
-                    espStroke.Color = Color3.fromRGB(0, 0, 0) -- Black borders
+                    espStroke.Color = Color3.fromRGB(0, 0, 0)
                 end
                 Rayfield:Notify({
                     Title = "Reset",
@@ -184,93 +247,46 @@ else
             end
         end
 
-        -- Toggle Inf Jump
-        function toggleInfJump()
-            infJumpEnabled = not infJumpEnabled
-            if InfJumpToggle then InfJumpToggle:Set(infJumpEnabled) end
-            if infJumpEnabled then
-                if infJumpConnection then infJumpConnection:Disconnect() end
-                infJumpConnection = UserInputService.JumpRequest:Connect(function()
-                    if LocalPlayer.Character then
-                        LocalPlayer.Character:FindFirstChildOfClass('Humanoid'):ChangeState("Jumping")
-                    end
-                end)
-                if infJumpStroke then
-                    infJumpStroke.Color = Color3.fromRGB(0, 255, 0) -- Green borders
-                end
-                Rayfield:Notify({
-                    Title = "Success",
-                    Content = "Infinite Jump enabled.",
-                    Duration = 3,
-                    Image = "rbxassetid://4483345998"
-                })
-            else
-                if infJumpConnection then
-                    infJumpConnection:Disconnect()
-                    infJumpConnection = nil
-                end
-                if infJumpStroke then
-                    infJumpStroke.Color = Color3.fromRGB(0, 0, 0) -- Black borders
-                end
-                Rayfield:Notify({
-                    Title = "Reset",
-                    Content = "Infinite Jump disabled.",
-                    Duration = 3,
-                    Image = "rbxassetid://4483345998"
-                })
-            end
-        end
-
-        -- Function to create the ESP floating draggable button
+        -- Floating ESP button (same as before)
         local function createFloatingEspButton()
             if floatingEspButton then return end
-
             local screenGui = Instance.new("ScreenGui")
             screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
             screenGui.IgnoreGuiInset = true
-            screenGui.ResetOnSpawn = false -- Prevent reset on death
-
+            screenGui.ResetOnSpawn = false
             floatingEspButton = Instance.new("Frame")
-            floatingEspButton.Size = UDim2.new(0, 50, 0, 50) -- Made smaller
+            floatingEspButton.Size = UDim2.new(0, 50, 0, 50)
             floatingEspButton.Position = UDim2.new(0.4, 0, 0.5, 0)
-            floatingEspButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255) -- White background
+            floatingEspButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
             floatingEspButton.BorderSizePixel = 0
             floatingEspButton.Parent = screenGui
-
             local uiCorner = Instance.new("UICorner")
-            uiCorner.CornerRadius = UDim.new(1, 0) -- Fully circular
+            uiCorner.CornerRadius = UDim.new(1, 0)
             uiCorner.Parent = floatingEspButton
-
             espStroke = Instance.new("UIStroke")
             espStroke.Thickness = 2
-            espStroke.Color = glassEspEnabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(0, 0, 0) -- Sync with ESP state
+            espStroke.Color = glassEspEnabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(0, 0, 0)
             espStroke.Parent = floatingEspButton
-
             local textLabel = Instance.new("TextLabel")
             textLabel.Size = UDim2.new(1, 0, 1, 0)
             textLabel.BackgroundTransparency = 1
             textLabel.Text = "ESP"
-            textLabel.TextColor3 = Color3.fromRGB(0, 0, 0) -- Black text
+            textLabel.TextColor3 = Color3.fromRGB(0, 0, 0)
             textLabel.TextSize = 14
             textLabel.Font = Enum.Font.SourceSansBold
             textLabel.Parent = floatingEspButton
-
             local button = Instance.new("TextButton")
             button.Size = UDim2.new(1, 0, 1, 0)
             button.BackgroundTransparency = 1
             button.Text = ""
             button.Parent = floatingEspButton
             button.MouseButton1Click:Connect(toggleGlassEsp)
-
-            -- Make it draggable
             local dragging = false
             local dragInput, dragStart, startPos
-
             local function update(input)
                 local delta = input.Position - dragStart
                 floatingEspButton.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
             end
-
             button.InputBegan:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                     dragging = true
@@ -283,13 +299,11 @@ else
                     end)
                 end
             end)
-
             button.InputChanged:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
                     dragInput = input
                 end
             end)
-
             UserInputService.InputChanged:Connect(function(input)
                 if input == dragInput and dragging then
                     update(input)
@@ -297,40 +311,34 @@ else
             end)
         end
 
-        -- Function to create the Correct All floating draggable button (one-time execution)
+        -- Floating Correct All button (same)
         local function createFloatingCorrectButton()
             if floatingCorrectButton then return end
-
             local screenGui = Instance.new("ScreenGui")
             screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
             screenGui.IgnoreGuiInset = true
-            screenGui.ResetOnSpawn = false -- Prevent reset on death
-
+            screenGui.ResetOnSpawn = false
             floatingCorrectButton = Instance.new("Frame")
             floatingCorrectButton.Size = UDim2.new(0, 50, 0, 50)
             floatingCorrectButton.Position = UDim2.new(0.6, 0, 0.5, 0)
-            floatingCorrectButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255) -- White background
+            floatingCorrectButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
             floatingCorrectButton.BorderSizePixel = 0
             floatingCorrectButton.Parent = screenGui
-
             local uiCorner = Instance.new("UICorner")
-            uiCorner.CornerRadius = UDim.new(1, 0) -- Fully circular
+            uiCorner.CornerRadius = UDim.new(1, 0)
             uiCorner.Parent = floatingCorrectButton
-
             correctStroke = Instance.new("UIStroke")
             correctStroke.Thickness = 2
-            correctStroke.Color = Color3.fromRGB(0, 0, 0) -- Start black
+            correctStroke.Color = Color3.fromRGB(0, 0, 0)
             correctStroke.Parent = floatingCorrectButton
-
             local textLabel = Instance.new("TextLabel")
             textLabel.Size = UDim2.new(1, 0, 1, 0)
             textLabel.BackgroundTransparency = 1
             textLabel.Text = "ALL"
-            textLabel.TextColor3 = Color3.fromRGB(0, 0, 0) -- Black text
+            textLabel.TextColor3 = Color3.fromRGB(0, 0, 0)
             textLabel.TextSize = 14
             textLabel.Font = Enum.Font.SourceSansBold
             textLabel.Parent = floatingCorrectButton
-
             local button = Instance.new("TextButton")
             button.Size = UDim2.new(1, 0, 1, 0)
             button.BackgroundTransparency = 1
@@ -338,20 +346,16 @@ else
             button.Parent = floatingCorrectButton
             button.MouseButton1Click:Connect(function()
                 executeCorrectAll()
-                correctStroke.Color = Color3.fromRGB(0, 255, 0) -- Green for 500ms
+                correctStroke.Color = Color3.fromRGB(0, 255, 0)
                 task.wait(0.5)
-                correctStroke.Color = Color3.fromRGB(0, 0, 0) -- Back to black
+                correctStroke.Color = Color3.fromRGB(0, 0, 0)
             end)
-
-            -- Make it draggable (same as ESP)
             local dragging = false
             local dragInput, dragStart, startPos
-
             local function update(input)
                 local delta = input.Position - dragStart
                 floatingCorrectButton.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
             end
-
             button.InputBegan:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                     dragging = true
@@ -364,13 +368,11 @@ else
                     end)
                 end
             end)
-
             button.InputChanged:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
                     dragInput = input
                 end
             end)
-
             UserInputService.InputChanged:Connect(function(input)
                 if input == dragInput and dragging then
                     update(input)
@@ -378,83 +380,7 @@ else
             end)
         end
 
-        -- Function to create the Inf Jump floating draggable button
-        local function createFloatingInfJumpButton()
-            if floatingInfJumpButton then return end
-
-            local screenGui = Instance.new("ScreenGui")
-            screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-            screenGui.IgnoreGuiInset = true
-            screenGui.ResetOnSpawn = false -- Prevent reset on death
-
-            floatingInfJumpButton = Instance.new("Frame")
-            floatingInfJumpButton.Size = UDim2.new(0, 50, 0, 50)
-            floatingInfJumpButton.Position = UDim2.new(0.5, 0, 0.5, 0)
-            floatingInfJumpButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255) -- White background
-            floatingInfJumpButton.BorderSizePixel = 0
-            floatingInfJumpButton.Parent = screenGui
-
-            local uiCorner = Instance.new("UICorner")
-            uiCorner.CornerRadius = UDim.new(1, 0) -- Fully circular
-            uiCorner.Parent = floatingInfJumpButton
-
-            infJumpStroke = Instance.new("UIStroke")
-            infJumpStroke.Thickness = 2
-            infJumpStroke.Color = infJumpEnabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(0, 0, 0) -- Sync with state
-            infJumpStroke.Parent = floatingInfJumpButton
-
-            local textLabel = Instance.new("TextLabel")
-            textLabel.Size = UDim2.new(1, 0, 1, 0)
-            textLabel.BackgroundTransparency = 1
-            textLabel.Text = "INF"
-            textLabel.TextColor3 = Color3.fromRGB(0, 0, 0) -- Black text
-            textLabel.TextSize = 14
-            textLabel.Font = Enum.Font.SourceSansBold
-            textLabel.Parent = floatingInfJumpButton
-
-            local button = Instance.new("TextButton")
-            button.Size = UDim2.new(1, 0, 1, 0)
-            button.BackgroundTransparency = 1
-            button.Text = ""
-            button.Parent = floatingInfJumpButton
-            button.MouseButton1Click:Connect(toggleInfJump)
-
-            -- Make it draggable (same as others)
-            local dragging = false
-            local dragInput, dragStart, startPos
-
-            local function update(input)
-                local delta = input.Position - dragStart
-                floatingInfJumpButton.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-            end
-
-            button.InputBegan:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                    dragging = true
-                    dragStart = input.Position
-                    startPos = floatingInfJumpButton.Position
-                    input.Changed:Connect(function()
-                        if input.UserInputState == Enum.UserInputState.End then
-                            dragging = false
-                        end
-                    end)
-                end
-            end)
-
-            button.InputChanged:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-                    dragInput = input
-                end
-            end)
-
-            UserInputService.InputChanged:Connect(function(input)
-                if input == dragInput and dragging then
-                    update(input)
-                end
-            end)
-        end
-
-        -- Function to destroy the floating ESP button
+        -- Destroy functions
         local function destroyFloatingEspButton()
             if floatingEspButton then
                 floatingEspButton.Parent:Destroy()
@@ -463,7 +389,6 @@ else
             end
         end
 
-        -- Function to destroy the floating Correct All button
         local function destroyFloatingCorrectButton()
             if floatingCorrectButton then
                 floatingCorrectButton.Parent:Destroy()
@@ -472,34 +397,18 @@ else
             end
         end
 
-        -- Function to destroy the floating Inf Jump button
-        local function destroyFloatingInfJumpButton()
-            if floatingInfJumpButton then
-                floatingInfJumpButton.Parent:Destroy()
-                floatingInfJumpButton = nil
-                infJumpStroke = nil
-            end
-        end
-
-        -- Recreate floating buttons on character respawn
+        -- Recreate on respawn
         LocalPlayer.CharacterAdded:Connect(function()
-            -- Wait a bit for the game to stabilize
             task.wait(2)
-            
-            -- Recreate buttons if they were enabled
             if floatingEspButtonToggle and floatingEspButtonToggle.CurrentValue then
                 createFloatingEspButton()
             end
             if floatingCorrectButtonToggle and floatingCorrectButtonToggle.CurrentValue then
                 createFloatingCorrectButton()
             end
-            if floatingInfJumpButtonToggle and floatingInfJumpButtonToggle.CurrentValue then
-                createFloatingInfJumpButton()
-            end
-            
-            -- Reapply ESP if enabled
             if glassEspEnabled then
-                applyGlassEsp()
+                updateEspCache()
+                applyCachedEsp()
             end
         end)
 
@@ -512,29 +421,7 @@ else
             Flag = "Glass_ESP",
             Callback = function(v)
                 glassEspEnabled = v
-                if v then
-                    applyGlassEsp()
-                    if espStroke then
-                        espStroke.Color = Color3.fromRGB(0, 255, 0)
-                    end
-                    Rayfield:Notify({
-                        Title = "Success",
-                        Content = "glass_tempered (neon green) enabled.",
-                        Duration = 3,
-                        Image = "rbxassetid://4483345998"
-                    })
-                else
-                    resetGlassEsp()
-                    if espStroke then
-                        espStroke.Color = Color3.fromRGB(0, 0, 0)
-                    end
-                    Rayfield:Notify({
-                        Title = "Reset",
-                        Content = "glass_tempered reset to original colors.",
-                        Duration = 3,
-                        Image = "rbxassetid://4483345998"
-                    })
-                end
+                toggleGlassEsp()
             end,
         })
 
@@ -544,19 +431,16 @@ else
             Callback = executeCorrectAll
         })
 
-        TabMain:CreateSection("Other Features")
-        InfJumpToggle = TabMain:CreateToggle({
-            Name = "Infinite Jump",
+        TabMain:CreateSection("Debug")
+        DebugLagToggle = TabMain:CreateToggle({
+            Name = "Debug Lag (Console Times)",
             CurrentValue = false,
-            Flag = "Inf_Jump",
-            Callback = function(v)
-                infJumpEnabled = v
-                toggleInfJump()
-            end,
+            Flag = "Debug_Lag",
+            Callback = function() end
         })
 
         TabMain:CreateSection("Configuration")
-        TabMain:CreateLabel("Settings save manually in-game.")
+        TabMain:CreateLabel("Settings save manually. Optimized for ~18 Steps in workspace.")
 
         -- ================= TAB: MOBILE =================
         local TabMobile = Window:CreateTab("Mobile", "smartphone")
@@ -568,20 +452,10 @@ else
             Callback = function(v)
                 if v then
                     createFloatingEspButton()
-                    Rayfield:Notify({
-                        Title = "Success",
-                        Content = "ESP floating button enabled.",
-                        Duration = 3,
-                        Image = "rbxassetid://4483345998"
-                    })
+                    Rayfield:Notify({ Title = "Success", Content = "ESP floating button enabled.", Duration = 3, Image = "rbxassetid://4483345998" })
                 else
                     destroyFloatingEspButton()
-                    Rayfield:Notify({
-                        Title = "Success",
-                        Content = "ESP floating button disabled.",
-                        Duration = 3,
-                        Image = "rbxassetid://4483345998"
-                    })
+                    Rayfield:Notify({ Title = "Success", Content = "ESP floating button disabled.", Duration = 3, Image = "rbxassetid://4483345998" })
                 end
             end,
         })
@@ -593,45 +467,10 @@ else
             Callback = function(v)
                 if v then
                     createFloatingCorrectButton()
-                    Rayfield:Notify({
-                        Title = "Success",
-                        Content = "Correct All floating button enabled.",
-                        Duration = 3,
-                        Image = "rbxassetid://4483345998"
-                    })
+                    Rayfield:Notify({ Title = "Success", Content = "Correct All floating button enabled.", Duration = 3, Image = "rbxassetid://4483345998" })
                 else
                     destroyFloatingCorrectButton()
-                    Rayfield:Notify({
-                        Title = "Success",
-                        Content = "Correct All floating button disabled.",
-                        Duration = 3,
-                        Image = "rbxassetid://4483345998"
-                    })
-                end
-            end,
-        })
-
-        floatingInfJumpButtonToggle = TabMobile:CreateToggle({
-            Name = "Inf Jump Button",
-            CurrentValue = false,
-            Flag = "Floating_InfJump_Button",
-            Callback = function(v)
-                if v then
-                    createFloatingInfJumpButton()
-                    Rayfield:Notify({
-                        Title = "Success",
-                        Content = "Inf Jump floating button enabled.",
-                        Duration = 3,
-                        Image = "rbxassetid://4483345998"
-                    })
-                else
-                    destroyFloatingInfJumpButton()
-                    Rayfield:Notify({
-                        Title = "Success",
-                        Content = "Inf Jump floating button disabled.",
-                        Duration = 3,
-                        Image = "rbxassetid://4483345998"
-                    })
+                    Rayfield:Notify({ Title = "Success", Content = "Correct All floating button disabled.", Duration = 3, Image = "rbxassetid://4483345998" })
                 end
             end,
         })
@@ -653,20 +492,13 @@ else
             Flag = "Keybind_CorrectAll",
             Callback = executeCorrectAll
         })
-        TabKeys:CreateKeybind({
-            Name = "Toggle Inf Jump",
-            CurrentKeybind = "F",
-            HoldToInteract = false,
-            Flag = "Keybind_InfJump",
-            Callback = toggleInfJump
-        })
         TabKeys:CreateLabel("Press G to open/close the menu")
-        TabKeys:CreateLabel("Default: E for Glass ESP, R for Correct All, F for Inf Jump")
+        TabKeys:CreateLabel("Default: E for Glass ESP, R for Correct All")
 
         -- ================== CREDITS ==================
         local TabCredits = Window:CreateTab("Credits", "award")
         TabCredits:CreateSection("Script Information")
-        TabCredits:CreateLabel("Glass Color Menu | Made by Estardax ⚡")
+        TabCredits:CreateLabel("Glass Color Menu | Made by Estardax ⚡ (Low Lag Edition)")
         TabCredits:CreateLabel("UI powered by Rayfield Library")
         TabCredits:CreateLabel("Scriptax HUB - Advanced Glass Bridge Tools")
 

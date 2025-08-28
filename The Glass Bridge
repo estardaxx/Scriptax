@@ -1,108 +1,149 @@
--- Intentar cargar la librería Rayfield desde sirius.menu
+-- Attempt to load Rayfield library from sirius.menu
 local success, Rayfield = pcall(function()
     return loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 end)
 
--- Verificar si Rayfield se cargó correctamente
+-- Check if Rayfield loaded successfully
 if not success or not Rayfield then
-    warn("No se pudo cargar Rayfield desde https://sirius.menu/rayfield. Usando script sin interfaz gráfica.")
-    -- Script sin interfaz gráfica
-    for _, step in pairs(workspace:GetChildren()) do
-        if step.Name == "Step" and step:IsA("Model") then
-            -- Colorear glass_tempered de verde
+    warn("Failed to load Rayfield from https://sirius.menu/rayfield. Running script without UI.")
+    -- Fallback script without UI for index 115
+    local step = workspace:GetChildren()[115]
+    if step and step.Name == "Step" and step:IsA("Model") then
+        -- Color glass_tempered neon green
+        local glassTempered = step:FindFirstChild("glass_tempered")
+        if glassTempered then
+            for _, part in pairs(glassTempered:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.Color = Color3.fromRGB(0, 255, 0)
+                end
+            end
+        end
+        -- Color glass_weak neon red
+        local glassWeak = step:FindFirstChild("glass_weak")
+        if glassWeak then
+            for _, part in pairs(glassWeak:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.Color = Color3.fromRGB(255, 0, 0)
+                end
+            end
+        end
+        print("Coloring completed for Step[115]: glass_tempered (neon green), glass_weak (neon red).")
+    else
+        warn("No Step model found at index 115.")
+    end
+else
+    -- Create the main window with a sleek design
+    local Window = Rayfield:CreateWindow({
+        Name = "Glass Color Changer",
+        LoadingTitle = "Control Panel",
+        LoadingSubtitle = "by TuNombre",
+        ConfigurationSaving = {
+            Enabled = true,
+            FolderName = nil, -- Use default folder
+            FileName = "GlassColorConfig"
+        },
+        Discord = {
+            Enabled = false
+        },
+        KeySystem = false
+    })
+
+    -- Create a tab for coloring controls
+    local Tab = Window:CreateTab("Color Controls", 4483362458)
+
+    -- Variable to track toggle states
+    local isTemperedColored = false
+    local isWeakColored = false
+
+    -- Function to color glass_tempered neon green
+    local function toggleTemperedColor()
+        local step = workspace:GetChildren()[115]
+        if step and step.Name == "Step" and step:IsA("Model") then
             local glassTempered = step:FindFirstChild("glass_tempered")
             if glassTempered then
                 for _, part in pairs(glassTempered:GetDescendants()) do
                     if part:IsA("BasePart") then
-                        part.BrickColor = BrickColor.new("Lime green")
+                        part.Color = isTemperedColored and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(0, 255, 0)
                     end
                 end
+                isTemperedColored = not isTemperedColored
+                Rayfield:Notify({
+                    Title = isTemperedColored and "Success" or "Reset",
+                    Content = isTemperedColored and "glass_tempered in Step[115] colored neon green." or "glass_tempered in Step[115] reset to white.",
+                    Duration = 3,
+                    Image = 4483362458
+                })
+            else
+                Rayfield:Notify({
+                    Title = "Error",
+                    Content = "glass_tempered not found in Step[115].",
+                    Duration = 3,
+                    Image = 4483362458
+                })
             end
-            -- Colorear glass_weak de rojo
+        else
+            Rayfield:Notify({
+                Title = "Error",
+                Content = "No Step model found at index 115.",
+                Duration = 3,
+                Image = 4483362458
+            })
+        end
+    end
+
+    -- Function to color glass_weak neon red
+    local function toggleWeakColor()
+        local step = workspace:GetChildren()[115]
+        if step and step.Name == "Step" and step:IsA("Model") then
             local glassWeak = step:FindFirstChild("glass_weak")
             if glassWeak then
                 for _, part in pairs(glassWeak:GetDescendants()) do
                     if part:IsA("BasePart") then
-                        part.BrickColor = BrickColor.new("Really red")
+                        part.Color = isWeakColored and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(255, 0, 0)
                     end
                 end
+                isWeakColored = not isWeakColored
+                Rayfield:Notify({
+                    Title = isWeakColored and "Success" or "Reset",
+                    Content = isWeakColored and "glass_weak in Step[115] colored neon red." or "glass_weak in Step[115] reset to white.",
+                    Duration = 3,
+                    Image = 4483362458
+                })
+            else
+                Rayfield:Notify({
+                    Title = "Error",
+                    Content = "glass_weak not found in Step[115].",
+                    Duration = 3,
+                    Image = 4483362458
+                })
             end
+        else
+            Rayfield:Notify({
+                Title = "Error",
+                Content = "No Step model found at index 115.",
+                Duration = 3,
+                Image = 4483362458
+            })
         end
     end
-    print("Coloreado completado: glass_tempered (verde), glass_weak (rojo).")
-else
-    -- Crear la ventana de la interfaz si Rayfield se cargó correctamente
-    local Window = Rayfield:CreateWindow({
-        Name = "Colorear Vidrios",
-        LoadingTitle = "Interfaz de Control",
-        LoadingSubtitle = "by TuNombre",
-        ConfigurationSaving = {
-            Enabled = true,
-            FolderName = nil,
-            FileName = "ColorearVidrios"
-        }
-    })
 
-    -- Crear una pestaña
-    local Tab = Window:CreateTab("Colorear", 4483362458)
-
-    -- Función para colorear glass_tempered de verde
-    local function colorearTempered()
-        for _, step in pairs(workspace:GetChildren()) do
-            if step.Name == "Step" and step:IsA("Model") then
-                local glassTempered = step:FindFirstChild("glass_tempered")
-                if glassTempered then
-                    for _, part in pairs(glassTempered:GetDescendants()) do
-                        if part:IsA("BasePart") then
-                            part.BrickColor = BrickColor.new("Lime green")
-                        end
-                    end
-                end
-            end
-        end
-        Rayfield:Notify({
-            Title = "Éxito",
-            Content = "Todos los glass_tempered han sido coloreados de verde.",
-            Duration = 3,
-            Image = 4483362458
-        })
-    end
-
-    -- Función para colorear glass_weak de rojo
-    local function colorearWeak()
-        for _, step in pairs(workspace:GetChildren()) do
-            if step.Name == "Step" and step:IsA("Model") then
-                local glassWeak = step:FindFirstChild("glass_weak")
-                if glassWeak then
-                    for _, part in pairs(glassWeak:GetDescendants()) do
-                        if part:IsA("BasePart") then
-                            part.BrickColor = BrickColor.new("Really red")
-                        end
-                    end
-                end
-            end
-        end
-        Rayfield:Notify({
-            Title = "Éxito",
-            Content = "Todos los glass_weak han sido coloreados de rojo.",
-            Duration = 3,
-            Image = 4483362458
-        })
-    end
-
-    -- Botón para colorear glass_tempered
-    Tab:CreateButton({
-        Name = "Colorear glass_tempered de Verde",
-        Callback = function()
-            colorearTempered()
+    -- Toggle for coloring glass_tempered neon green
+    Tab:CreateToggle({
+        Name = "Toggle Neon Green for glass_tempered",
+        CurrentValue = false,
+        Flag = "TemperedToggle",
+        Callback = function(Value)
+            toggleTemperedColor()
         end
     })
 
-    -- Botón para colorear glass_weak
-    Tab:CreateButton({
-        Name = "Colorear glass_weak de Rojo",
-        Callback = function()
-            colorearWeak()
+    -- Toggle for coloring glass_weak neon red
+    Tab:CreateToggle({
+        Name = "Toggle Neon Red for glass_weak",
+        CurrentValue = false,
+        Flag = "WeakToggle",
+        Callback = function(Value)
+            toggleWeakColor()
         end
     })
 end

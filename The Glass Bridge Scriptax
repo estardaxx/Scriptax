@@ -58,7 +58,7 @@ else
         local correctAllEnabled = false
         local originalTempered = {} -- [part] = {Color=..., Material=...}
         local originalWeak = {} -- [part] = {Color=..., Material=...}
-        local hiddenDetectors = {} -- Store hidden detectors props to restore later
+        local hiddenDetectors = {} -- [detector] = {CFrame=...}  -- Cambiado para mover en lugar de ocultar
         local GlassEspToggle = nil -- Reference to Glass ESP toggle
         local CorrectAllToggle = nil -- Reference to Correct All toggle
         local floatingEspButton = nil -- Reference to the ESP floating button UI
@@ -96,7 +96,7 @@ else
             end
         end
 
-        -- Apply Correct All to a single step
+        -- Apply Correct All to a single step (Cambiado: Mover detector en lugar de ocultar)
         local function applyToStepCorrect(step)
             local glassWeak = step:FindFirstChild("glass_weak")
             if glassWeak then
@@ -111,12 +111,12 @@ else
                     end
                 end
                 
-                -- Hide detector by making it transparent and non-collidable
+                -- Mover detector a un lugar lejano
                 local detector = glassWeak:FindFirstChild("Detector")
-                if detector and detector:IsA("BasePart") and not hiddenDetectors[glassWeak] then
-                    hiddenDetectors[glassWeak] = { Transparency = detector.Transparency, CanCollide = detector.CanCollide }
-                    detector.Transparency = 1
-                    detector.CanCollide = false
+                if detector and detector:IsA("BasePart") and not hiddenDetectors[detector] then
+                    hiddenDetectors[detector] = { CFrame = detector.CFrame }
+                    detector.CFrame = CFrame.new(0, -10000, 0)  -- Mover lejos (ajusta si necesitas)
+                    print("Debug: Detector movido para glass_weak en step: " .. step.Name)  -- Debug opcional
                 end
             end
         end
@@ -150,16 +150,13 @@ else
             originalTempered = {} -- Clear after reset
         end
 
-        -- Reset Correct All
+        -- Reset Correct All (Cambiado: Restaurar posición del detector)
         local function resetCorrectAll()
-            -- Restore detectors
-            for glassWeak, props in pairs(hiddenDetectors) do
-                if glassWeak and glassWeak:IsDescendantOf(workspace) then
-                    local detector = glassWeak:FindFirstChild("Detector")
-                    if detector then
-                        detector.Transparency = props.Transparency
-                        detector.CanCollide = props.CanCollide
-                    end
+            -- Restore detectors positions
+            for detector, props in pairs(hiddenDetectors) do
+                if detector and detector:IsDescendantOf(workspace) then
+                    detector.CFrame = props.CFrame
+                    print("Debug: Detector restaurado para: " .. detector.Parent.Name)  -- Debug opcional
                 end
             end
             hiddenDetectors = {} -- Clear the table
@@ -203,18 +200,18 @@ else
             end
         end
 
-        -- Toggle Correct All
+        -- Toggle Correct All (Actualizado notificación para reflejar cambio)
         function toggleCorrectAll()
             correctAllEnabled = not correctAllEnabled
             if CorrectAllToggle then CorrectAllToggle:Set(correctAllEnabled) end
             if correctAllEnabled then
                 applyCorrectAll()
                 if correctStroke then
-                    correctStroke.Color = Color3.fromRGB(0, 255, 0) -- Green borders (changed from blue)
+                    correctStroke.Color = Color3.fromRGB(0, 255, 0) -- Green borders
                 end
                 Rayfield:Notify({
                     Title = "Success",
-                    Content = "glass_weak (blue neon) enabled and detectors hidden.",
+                    Content = "glass_weak (blue neon) enabled and detectors moved away.",
                     Duration = 3,
                     Image = "rbxassetid://4483345998"
                 })
@@ -225,7 +222,7 @@ else
                 end
                 Rayfield:Notify({
                     Title = "Reset",
-                    Content = "glass_weak reset and detectors restored.",
+                    Content = "glass_weak reset and detectors restored to position.",
                     Duration = 3,
                     Image = "rbxassetid://4483345998"
                 })
@@ -473,7 +470,7 @@ else
                     end
                     Rayfield:Notify({
                         Title = "Success",
-                        Content = "glass_weak (blue neon) enabled and detectors hidden.",
+                        Content = "glass_weak (blue neon) enabled and detectors moved away.",
                         Duration = 3,
                         Image = "rbxassetid://4483345998"
                     })
@@ -484,7 +481,7 @@ else
                     end
                     Rayfield:Notify({
                         Title = "Reset",
-                        Content = "glass_weak reset and detectors restored.",
+                        Content = "glass_weak reset and detectors restored to position.",
                         Duration = 3,
                         Image = "rbxassetid://4483345998"
                     })

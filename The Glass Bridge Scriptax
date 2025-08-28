@@ -6,30 +6,26 @@ end)
 -- Check if Rayfield loaded successfully
 if not success or not Rayfield then
     warn("Failed to load Rayfield from https://sirius.menu/rayfield. Running script without UI.")
-    -- Fallback script without UI (optimizado: solo modelos con glass_tempered)
-    local cachedSteps = {}
+    -- Fallback script without UI
     for _, step in ipairs(workspace:GetChildren()) do
         if step:IsA("Model") and step:FindFirstChild("glass_tempered") then
-            table.insert(cachedSteps, step)
-        end
-    end
-    for _, step in ipairs(cachedSteps) do
-        local glassTempered = step:FindFirstChild("glass_tempered")
-        if glassTempered then
-            for _, part in ipairs(glassTempered:GetDescendants()) do
-                if part:IsA("BasePart") or part:IsA("MeshPart") then
-                    part.Color = Color3.fromRGB(0, 255, 0) -- Neon green
-                    part.Material = Enum.Material.Neon
+            local glassTempered = step:FindFirstChild("glass_tempered")
+            if glassTempered then
+                for _, part in ipairs(glassTempered:GetDescendants()) do
+                    if part:IsA("BasePart") or part:IsA("MeshPart") then
+                        part.Color = Color3.fromRGB(0, 255, 0) -- Neon green
+                        part.Material = Enum.Material.Neon
+                    end
                 end
             end
         end
     end
-    print("Coloring completed: glass_tempered (neon green) via cache.")
+    print("Coloring completed: glass_tempered (neon green).")
 else
     -- Show decorative notification on script start
     Rayfield:Notify({
         Title = "Scriptax HUB",
-        Content = "Welcome to Scriptax HUB! Glass Color Menu loaded (crash-proof, auto-reapply ESP).",
+        Content = "Welcome to Scriptax HUB! Glass Color Menu loaded (simple, crash-proof, auto-reapply).",
         Duration = 4,
         Image = "rbxassetid://4483345998"
     })
@@ -60,8 +56,6 @@ else
         -- ================== SHARED VARS ==================
         local glassEspEnabled = false
         local originalTempered = {} -- [part] = {Color=..., Material=...}
-        local cachedSteps = {} -- Cache de modelos con glass_tempered
-        local cachedTemperedParts = {} -- Sub-cache de parts para ESP
         local GlassEspToggle = nil -- Reference to Glass ESP toggle
         local DebugLagToggle = nil -- Opcional: Para medir lag
         local floatingEspButton = nil -- Reference to the ESP floating button UI
@@ -71,142 +65,69 @@ else
         local espStroke = nil -- Reference to the ESP UIStroke for borders
         local correctStroke = nil -- Reference to the Correct All UIStroke for borders
         
-        -- ChildAdded connection for dynamic steps (crash-proof con retries)
+        -- ChildAdded connection for dynamic steps (crash-proof)
         local childAddedConnection = workspace.ChildAdded:Connect(function(child)
-            if child:IsA("Model") and child:FindFirstChild("glass_tempered") then
-                if glassEspEnabled then
-                    pcall(function()
-                        cacheAndApplyToStepEsp(child)
-                    end)
-                end
-            end
-        end)
-
-        -- Heartbeat optimizado: Chequea cada 3.5s, solo si cache cambió
-        local lastCheckTime = 0
-        local checkInterval = 3.5 -- Balance entre rapidez y bajo impacto
-        local previousStepCount = 0
-        RunService.Heartbeat:Connect(function()
-            if glassEspEnabled and os.clock() - lastCheckTime >= checkInterval then
-                lastCheckTime = os.clock()
-                local currentCount = #cachedSteps
-                if currentCount ~= previousStepCount then
-                    previousStepCount = currentCount
-                    pcall(function()
-                        updateEspCache()
-                        if DebugLagToggle and DebugLagToggle.CurrentValue then
-                            local startTime = os.clock()
-                            applyCachedEsp()
-                            print("Debug Lag: ESP reaplicación tomó " .. (os.clock() - startTime) * 1000 .. " ms")
-                        else
-                            applyCachedEsp()
-                        end
-                    end)
-                end
-            end
-        end)
-
-        -- Función para cachear y aplicar ESP a un Step (crash-proof con retries)
-        local function cacheAndApplyToStepEsp(step)
-            if not step or not step:IsDescendantOf(workspace) then return end
-            local glassTempered = step:FindFirstChild("glass_tempered")
-            local retries = 0
-            while not glassTempered and retries < 3 do
-                task.wait(0.2)
-                glassTempered = step:FindFirstChild("glass_tempered")
-                retries = retries + 1
-            end
-            if not glassTempered then
-                if DebugLagToggle and DebugLagToggle.CurrentValue then
-                    print("Debug: Step " .. step.Name .. " no tiene glass_tempered tras retries")
-                end
-                return
-            end
-            local stepIndex = #cachedSteps + 1
-            cachedSteps[stepIndex] = step
-            local parts = {}
-            cachedTemperedParts[stepIndex] = parts
-            for _, part in ipairs(glassTempered:GetDescendants()) do
-                if part:IsA("BasePart") or part:IsA("MeshPart") then
-                    if not originalTempered[part] then
-                        originalTempered[part] = { Color = part.Color, Material = part.Material }
-                    end
-                    part.Color = Color3.fromRGB(0, 255, 0) -- Neon green
-                    part.Material = Enum.Material.Neon
-                    table.insert(parts, part)
-                end
-            end
-        end
-
-        -- Actualiza cache completo
-        local function updateEspCache()
-            cachedSteps = {}
-            cachedTemperedParts = {}
-            for _, step in ipairs(workspace:GetChildren()) do
-                if step:IsA("Model") and step:FindFirstChild("glass_tempered") then
-                    pcall(function()
-                        cacheAndApplyToStepEsp(step)
-                    end)
-                end
-            end
-        end
-
-        -- Aplica ESP solo a parts cacheadas
-        local function applyCachedEsp()
-            for i, parts in ipairs(cachedTemperedParts) do
-                local step = cachedSteps[i]
-                if step and step:IsDescendantOf(workspace) then
-                    for _, part in ipairs(parts) do
-                        if part and part:IsDescendantOf(workspace) then
-                            if not originalTempered[part] then
-                                originalTempered[part] = { Color = part.Color, Material = part.Material }
-                            end
-                            part.Color = Color3.fromRGB(0, 255, 0)
-                            part.Material = Enum.Material.Neon
-                        end
-                    end
-                else
-                    cachedSteps[i] = nil
-                    cachedTemperedParts[i] = nil
-                end
-            end
-        end
-
-        -- Correct All (optimizado con cache one-time)
-        local function executeCorrectAll()
-            local startTime = tick()
-            local tempSteps = {}
-            for _, step in ipairs(workspace:GetChildren()) do
-                if step:IsA("Model") and step:FindFirstChild("glass_weak") then
-                    table.insert(tempSteps, step)
-                end
-            end
-            for _, step in ipairs(tempSteps) do
+            if glassEspEnabled and child:IsA("Model") and child:FindFirstChild("glass_tempered") then
                 pcall(function()
-                    local glassWeak = step:FindFirstChild("glass_weak")
-                    if glassWeak then
-                        for _, part in ipairs(glassWeak:GetDescendants()) do
+                    local glassTempered = child:FindFirstChild("glass_tempered")
+                    local retries = 0
+                    while not glassTempered and retries < 3 do
+                        task.wait(0.2)
+                        glassTempered = child:FindFirstChild("glass_tempered")
+                        retries = retries + 1
+                    end
+                    if glassTempered then
+                        for _, part in ipairs(glassTempered:GetDescendants()) do
                             if part:IsA("BasePart") or part:IsA("MeshPart") then
-                                part.Color = Color3.fromRGB(0, 0, 255) -- Blue
+                                if not originalTempered[part] then
+                                    originalTempered[part] = { Color = part.Color, Material = part.Material }
+                                end
+                                part.Color = Color3.fromRGB(0, 255, 0) -- Neon green
                                 part.Material = Enum.Material.Neon
                             end
                         end
-                        local detector = glassWeak:FindFirstChild("Detector")
-                        if detector then
-                            detector:Destroy()
-                        end
+                    elseif DebugLagToggle and DebugLagToggle.CurrentValue then
+                        print("Debug: ChildAdded Step " .. child.Name .. " no tiene glass_tempered tras retries")
                     end
                 end)
             end
-            if DebugLagToggle and DebugLagToggle.CurrentValue then
-                print("Debug Lag: Correct All tomó " .. (tick() - startTime) * 1000 .. " ms para " .. #tempSteps .. " steps")
+        end)
+
+        -- Heartbeat para reaplicar ESP tras resets
+        local lastCheckTime = 0
+        local checkInterval = 5 -- 5s para bajo impacto
+        RunService.Heartbeat:Connect(function()
+            if glassEspEnabled and os.clock() - lastCheckTime >= checkInterval then
+                lastCheckTime = os.clock()
+                pcall(function()
+                    applyGlassEsp()
+                    if DebugLagToggle and DebugLagToggle.CurrentValue then
+                        print("Debug Lag: ESP reaplicación tomó " .. (os.clock() - lastCheckTime) * 1000 .. " ms")
+                    end
+                end)
             end
-            Rayfield:Notify({
-                Title = "Success",
-                Content = "glass_weak colored blue neon and detectors destroyed (crash-proof).",
-                Duration = 3,
-                Image = "rbxassetid://4483345998"
-            })
+        end)
+
+        -- Aplicar ESP a todos los Steps
+        local function applyGlassEsp()
+            for _, step in ipairs(workspace:GetChildren()) do
+                if step:IsA("Model") and step:FindFirstChild("glass_tempered") then
+                    pcall(function()
+                        local glassTempered = step:FindFirstChild("glass_tempered")
+                        if glassTempered then
+                            for _, part in ipairs(glassTempered:GetDescendants()) do
+                                if part:IsA("BasePart") or part:IsA("MeshPart") then
+                                    if not originalTempered[part] then
+                                        originalTempered[part] = { Color = part.Color, Material = part.Material }
+                                    end
+                                    part.Color = Color3.fromRGB(0, 255, 0) -- Neon green
+                                    part.Material = Enum.Material.Neon
+                                end
+                            end
+                        end
+                    end)
+                end
+            end
         end
 
         -- Reset ESP
@@ -218,25 +139,55 @@ else
                 end
             end
             originalTempered = {}
-            cachedSteps = {}
-            cachedTemperedParts = {}
+        end
+
+        -- Correct All (one-shot)
+        local function executeCorrectAll()
+            local startTime = tick()
+            for _, step in ipairs(workspace:GetChildren()) do
+                if step:IsA("Model") and step:FindFirstChild("glass_weak") then
+                    pcall(function()
+                        local glassWeak = step:FindFirstChild("glass_weak")
+                        if glassWeak then
+                            for _, part in ipairs(glassWeak:GetDescendants()) do
+                                if part:IsA("BasePart") or part:IsA("MeshPart") then
+                                    part.Color = Color3.fromRGB(0, 0, 255) -- Blue
+                                    part.Material = Enum.Material.Neon
+                                end
+                            end
+                            local detector = glassWeak:FindFirstChild("Detector")
+                            if detector then
+                                detector:Destroy()
+                            end
+                        end
+                    end)
+                end
+            end
+            if DebugLagToggle and DebugLagToggle.CurrentValue then
+                print("Debug Lag: Correct All tomó " .. (tick() - startTime) * 1000 .. " ms")
+            end
+            Rayfield:Notify({
+                Title = "Success",
+                Content = "glass_weak colored blue neon and detectors destroyed.",
+                Duration = 3,
+                Image = "rbxassetid://4483345998"
+            })
         end
 
         -- Toggle ESP
-        function toggleGlassEsp()
+        local function toggleGlassEsp()
             glassEspEnabled = not glassEspEnabled
             if GlassEspToggle then GlassEspToggle:Set(glassEspEnabled) end
             if glassEspEnabled then
                 pcall(function()
-                    updateEspCache()
-                    applyCachedEsp()
+                    applyGlassEsp()
                 end)
                 if espStroke then
                     espStroke.Color = Color3.fromRGB(0, 255, 0)
                 end
                 Rayfield:Notify({
                     Title = "Success",
-                    Content = "glass_tempered (neon green) enabled (crash-proof, auto-reapply).",
+                    Content = "glass_tempered (neon green) enabled (auto-reapply).",
                     Duration = 3,
                     Image = "rbxassetid://4483345998"
                 })
@@ -417,8 +368,7 @@ else
             end
             if glassEspEnabled then
                 pcall(function()
-                    updateEspCache()
-                    applyCachedEsp()
+                    applyGlassEsp()
                 end)
             end
         end)
@@ -451,7 +401,7 @@ else
         })
 
         TabMain:CreateSection("Configuration")
-        TabMain:CreateLabel("Settings save manually. Crash-proof, auto-reapply ESP for ~18 Steps.")
+        TabMain:CreateLabel("Settings save manually. Simple, crash-proof, auto-reapply ESP.")
 
         -- ================= TAB: MOBILE =================
         local TabMobile = Window:CreateTab("Mobile", "smartphone")
@@ -509,7 +459,7 @@ else
         -- ================== CREDITS ==================
         local TabCredits = Window:CreateTab("Credits", "award")
         TabCredits:CreateSection("Script Information")
-        TabCredits:CreateLabel("Glass Color Menu | Made by Estardax ⚡ (Crash-Proof Edition)")
+        TabCredits:CreateLabel("Glass Color Menu | Made by Estardax ⚡ (Simple Edition)")
         TabCredits:CreateLabel("UI powered by Rayfield Library")
         TabCredits:CreateLabel("Scriptax HUB - Advanced Glass Bridge Tools")
 

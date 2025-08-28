@@ -56,7 +56,8 @@ else
         -- ================== SHARED VARS ==================
         local glassEspEnabled = false
         local correctAllEnabled = false
-        local originalProps = {} -- [part] = {Color=..., Material=...}
+        local originalTempered = {} -- [part] = {Color=..., Material=...}
+        local originalWeak = {} -- [part] = {Color=..., Material=...}
         local hiddenDetectors = {} -- Store hidden detectors to restore later
         local GlassEspToggle = nil -- Reference to Glass ESP toggle
         local CorrectAllToggle = nil -- Reference to Correct All toggle
@@ -66,14 +67,22 @@ else
         local floatingCorrectButtonToggle = nil -- Reference to the Correct All mobile toggle
         local espStroke = nil -- Reference to the ESP UIStroke for borders
         local correctStroke = nil -- Reference to the Correct All UIStroke for borders
-        local cachedParts = { tempered = {}, weak = {} } -- Cache for parts to color
         local autoLoadToggle = nil -- Reference to auto load toggle
         local profileDropdown = nil -- Reference to profile dropdown
         local currentProfile = "Default" -- Current selected profile
         local profiles = {["Default"] = {}} -- Profile storage
         
-        -- Auto-refresh connection
-        local refreshConnection = nil
+        -- ChildAdded connection for dynamic steps
+        local childAddedConnection = workspace.ChildAdded:Connect(function(child)
+            if child.Name == "Step" and child:IsA("Model") then
+                if glassEspEnabled then
+                    applyToStepEsp(child)
+                end
+                if correctAllEnabled then
+                    applyToStepCorrect(child)
+                end
+            end
+        end)
 
         -- Profile management functions
         local function saveProfile(profileName)
@@ -124,96 +133,74 @@ else
             currentProfile = profileName
             Rayfield:Notify({
                 Title = "Profile Loaded",
-                Content = "Load " .. profileName,
+                Content = "Loaded " .. profileName,
                 Duration = 3,
                 Image = "rbxassetid://4483345998"
             })
         end
 
-        -- Cache parts to color
-        local function cacheParts()
-            cachedParts.tempered = {}
-            cachedParts.weak = {}
-            originalProps = {} -- Reset original props
-            
+        -- Apply ESP to a single step
+        local function applyToStepEsp(step)
+            local glassTempered = step:FindFirstChild("glass_tempered")
+            if glassTempered then
+                for _, part in pairs(glassTempered:GetDescendants()) do
+                    if part:IsA("BasePart") or part:IsA("MeshPart") then
+                        if not originalTempered[part] then
+                            originalTempered[part] = { Color = part.Color, Material = part.Material }
+                        end
+                        part.Color = Color3.fromRGB(0, 255, 0) -- Neon green
+                        part.Material = Enum.Material.Neon
+                    end
+                end
+            end
+        end
+
+        -- Apply Correct All to a single step
+        local function applyToStepCorrect(step)
+            local glassWeak = step:FindFirstChild("glass_weak")
+            if glassWeak then
+                -- Color weak glass parts blue neon
+                for _, part in pairs(glassWeak:GetDescendants()) do
+                    if part:IsA("BasePart") or part:IsA("MeshPart") then
+                        if not originalWeak[part] then
+                            originalWeak[part] = { Color = part.Color, Material = part.Material }
+                        end
+                        part.Color = Color3.fromRGB(0, 0, 255) -- Blue
+                        part.Material = Enum.Material.Neon -- Make it neon
+                    end
+                end
+                
+                -- Hide detector instead of destroying it
+                local detector = glassWeak:FindFirstChild("Detector")
+                if detector and not hiddenDetectors[glassWeak] then
+                    hiddenDetectors[glassWeak] = detector
+                    detector.Parent = nil -- Remove from parent but don't destroy
+                end
+            end
+        end
+
+        -- Apply ESP to all current steps
+        local function applyGlassEsp()
             for _, step in pairs(workspace:GetChildren()) do
                 if step.Name == "Step" and step:IsA("Model") then
-                    local glassTempered = step:FindFirstChild("glass_tempered")
-                    local glassWeak = step:FindFirstChild("glass_weak")
-                    
-                    if glassTempered then
-                        for _, part in pairs(glassTempered:GetDescendants()) do
-                            if part:IsA("BasePart") or part:IsA("MeshPart") then
-                                table.insert(cachedParts.tempered, part)
-                                if not originalProps[part] then
-                                    originalProps[part] = { Color = part.Color, Material = part.Material }
-                                end
-                            end
-                        end
-                    end
-                    
-                    if glassWeak then
-                        for _, part in pairs(glassWeak:GetDescendants()) do
-                            if part:IsA("BasePart") or part:IsA("MeshPart") then
-                                table.insert(cachedParts.weak, part)
-                                if not originalProps[part] then
-                                    originalProps[part] = { Color = part.Color, Material = part.Material }
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-            
-            if #cachedParts.tempered == 0 and #cachedParts.weak == 0 then
-                Rayfield:Notify({
-                    Title = "Warning",
-                    Content = "No glass parts found in workspace.",
-                    Duration = 5,
-                    Image = "rbxassetid://4483345998"
-                })
-            end
-        end
-
-        -- Apply ESP to cached tempered parts
-        local function applyGlassEsp()
-            for _, part in pairs(cachedParts.tempered) do
-                if part and part.Parent then
-                    part.Color = Color3.fromRGB(0, 255, 0) -- Neon green
-                    part.Material = Enum.Material.Neon
+                    applyToStepEsp(step)
                 end
             end
         end
 
-        -- Apply Correct All to cached weak parts
+        -- Apply Correct All to all current steps
         local function applyCorrectAll()
             for _, step in pairs(workspace:GetChildren()) do
                 if step.Name == "Step" and step:IsA("Model") then
-                    local glassWeak = step:FindFirstChild("glass_weak")
-                    if glassWeak then
-                        -- Color weak glass parts blue neon
-                        for _, part in pairs(glassWeak:GetDescendants()) do
-                            if part:IsA("BasePart") or part:IsA("MeshPart") then
-                                part.Color = Color3.fromRGB(0, 0, 255) -- Blue
-                                part.Material = Enum.Material.Neon -- Make it neon
-                            end
-                        end
-                        
-                        -- Hide detector instead of destroying it
-                        local detector = glassWeak:FindFirstChild("Detector")
-                        if detector and not hiddenDetectors[glassWeak] then
-                            detector.Parent = nil -- Remove from parent but don't destroy
-                            hiddenDetectors[glassWeak] = detector -- Store reference
-                        end
-                    end
+                    applyToStepCorrect(step)
                 end
             end
         end
 
         -- Reset ESP
         local function resetGlassEsp()
-            for part, props in pairs(originalProps) do
-                if typeof(part) == "Instance" and part and part.Parent and table.find(cachedParts.tempered, part) then
+            for part, props in pairs(originalTempered) do
+                if part and part:IsDescendantOf(workspace) then
                     part.Color = props.Color
                     part.Material = props.Material
                 end
@@ -224,38 +211,18 @@ else
         local function resetCorrectAll()
             -- First restore all detectors
             for glassWeak, detector in pairs(hiddenDetectors) do
-                if glassWeak and glassWeak.Parent and detector then
+                if glassWeak and glassWeak:IsDescendantOf(workspace) and detector and not detector.Parent then
                     detector.Parent = glassWeak
                 end
             end
             hiddenDetectors = {} -- Clear the table
             
             -- Then reset colors
-            for _, step in pairs(workspace:GetChildren()) do
-                if step.Name == "Step" and step:IsA("Model") then
-                    local glassWeak = step:FindFirstChild("glass_weak")
-                    if glassWeak then
-                        -- Reset weak glass parts color
-                        for _, part in pairs(glassWeak:GetDescendants()) do
-                            if part:IsA("BasePart") or part:IsA("MeshPart") then
-                                if originalProps[part] then
-                                    part.Color = originalProps[part].Color
-                                    part.Material = originalProps[part].Material
-                                end
-                            end
-                        end
-                    end
+            for part, props in pairs(originalWeak) do
+                if part and part:IsDescendantOf(workspace) then
+                    part.Color = props.Color
+                    part.Material = props.Material
                 end
-            end
-        end
-
-        -- Auto-refresh function
-        local function autoRefresh()
-            if glassEspEnabled then
-                applyGlassEsp()
-            end
-            if correctAllEnabled then
-                applyCorrectAll()
             end
         end
 
@@ -264,7 +231,6 @@ else
             glassEspEnabled = not glassEspEnabled
             if GlassEspToggle then GlassEspToggle:Set(glassEspEnabled) end
             if glassEspEnabled then
-                cacheParts()
                 applyGlassEsp()
                 if espStroke then
                     espStroke.Color = Color3.fromRGB(0, 255, 0) -- Green borders
@@ -294,7 +260,6 @@ else
             correctAllEnabled = not correctAllEnabled
             if CorrectAllToggle then CorrectAllToggle:Set(correctAllEnabled) end
             if correctAllEnabled then
-                cacheParts()
                 applyCorrectAll()
                 if correctStroke then
                     correctStroke.Color = Color3.fromRGB(0, 255, 0) -- Green borders (changed from blue)
@@ -494,10 +459,6 @@ else
             -- Wait a bit for the game to stabilize
             task.wait(2)
             
-            -- Reset states properly
-            hiddenDetectors = {}
-            originalProps = {}
-            
             -- Recreate buttons if they were enabled
             if floatingEspButtonToggle and floatingEspButtonToggle.CurrentValue then
                 createFloatingEspButton()
@@ -506,21 +467,13 @@ else
                 createFloatingCorrectButton()
             end
             
-            -- Re-cache and reapply if needed
-            if glassEspEnabled or correctAllEnabled then
-                cacheParts()
-                if glassEspEnabled then
-                    applyGlassEsp()
-                end
-                if correctAllEnabled then
-                    applyCorrectAll()
-                end
+            -- Reapply if needed (ChildAdded handles new, but reapply to existing if any changes)
+            if glassEspEnabled then
+                applyGlassEsp()
             end
-        end)
-
-        -- Auto-refresh system to maintain effects
-        refreshConnection = RunService.Heartbeat:Connect(function()
-            autoRefresh()
+            if correctAllEnabled then
+                applyCorrectAll()
+            end
         end)
 
         -- =================== TAB: MAIN ===================
@@ -533,7 +486,6 @@ else
             Callback = function(v)
                 glassEspEnabled = v
                 if v then
-                    cacheParts()
                     applyGlassEsp()
                     if espStroke then
                         espStroke.Color = Color3.fromRGB(0, 255, 0)
@@ -567,7 +519,6 @@ else
             Callback = function(v)
                 correctAllEnabled = v
                 if v then
-                    cacheParts()
                     applyCorrectAll()
                     if correctStroke then
                         correctStroke.Color = Color3.fromRGB(0, 255, 0)
@@ -642,6 +593,94 @@ else
                     Rayfield:Notify({
                         Title = "Success",
                         Content = "Correct All floating button disabled.",
+                        Duration = 3,
+                        Image = "rbxassetid://4483345998"
+                    })
+                end
+            end,
+        })
+
+        -- ================= TAB: PROFILES =================
+        local TabProfiles = Window:CreateTab("Profiles", "user")
+        TabProfiles:CreateSection("Profile Management")
+        
+        local profileName = TabProfiles:CreateInput({
+            Name = "Profile Name",
+            PlaceholderText = "Enter profile name...",
+            RemoveTextAfterFocusLost = false,
+            Callback = function(Text)
+                -- Just store the text, no immediate action
+            end,
+        })
+
+        TabProfiles:CreateButton({
+            Name = "Create Profile",
+            Callback = function()
+                local name = profileName.Text
+                if name and name ~= "" then
+                    saveProfile(name)
+                    -- Update dropdown options
+                    local options = {}
+                    for profileName, _ in pairs(profiles) do
+                        table.insert(options, profileName)
+                    end
+                    if profileDropdown then
+                        profileDropdown:Refresh(options, currentProfile)
+                    end
+                    Rayfield:Notify({
+                        Title = "Profile Created",
+                        Content = "Profile '" .. name .. "' has been created successfully.",
+                        Duration = 3,
+                        Image = "rbxassetid://4483345998"
+                    })
+                else
+                    Rayfield:Notify({
+                        Title = "Error",
+                        Content = "Please enter a valid profile name.",
+                        Duration = 3,
+                        Image = "rbxassetid://4483345998"
+                    })
+                end
+            end,
+        })
+
+        profileDropdown = TabProfiles:CreateDropdown({
+            Name = "Select Profile",
+            Options = {"Default"},
+            CurrentOption = "Default",
+            MultipleOptions = false,
+            Flag = "Selected_Profile",
+            Callback = function(Option)
+                currentProfile = Option
+            end,
+        })
+
+        TabProfiles:CreateButton({
+            Name = "Load Selected Profile",
+            Callback = function()
+                if currentProfile and profiles[currentProfile] then
+                    loadProfile(currentProfile)
+                else
+                    Rayfield:Notify({
+                        Title = "Error",
+                        Content = "Please select a valid profile.",
+                        Duration = 3,
+                        Image = "rbxassetid://4483345998"
+                    })
+                end
+            end,
+        })
+
+        autoLoadToggle = TabProfiles:CreateToggle({
+            Name = "Auto Load Profile",
+            CurrentValue = false,
+            Flag = "Auto_Load_Profile",
+            Callback = function(Value)
+                if Value and currentProfile and profiles[currentProfile] then
+                    -- Auto load will trigger on next script execution
+                    Rayfield:Notify({
+                        Title = "Auto Load Enabled",
+                        Content = "Profile '" .. currentProfile .. "' will auto-load on next execution.",
                         Duration = 3,
                         Image = "rbxassetid://4483345998"
                     })

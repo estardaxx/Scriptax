@@ -9,31 +9,18 @@ if not success or not Rayfield then
     -- Fallback script without UI
     for _, step in pairs(workspace:GetChildren()) do
         if step.Name == "Step" and step:IsA("Model") then
-            -- Color glass_tempered neon green
             local glassTempered = step:FindFirstChild("glass_tempered")
             if glassTempered then
                 for _, part in pairs(glassTempered:GetDescendants()) do
                     if part:IsA("BasePart") or part:IsA("MeshPart") then
                         part.Color = Color3.fromRGB(0, 255, 0) -- Neon green
                         part.Material = Enum.Material.Neon
-                        print("Colored glass_tempered part: " .. part.Name)
-                    end
-                end
-            end
-            -- Color glass_weak neon red
-            local glassWeak = step:FindFirstChild("glass_weak")
-            if glassWeak then
-                for _, part in pairs(glassWeak:GetDescendants()) do
-                    if part:IsA("BasePart") or part:IsA("MeshPart") then
-                        part.Color = Color3.fromRGB(255, 0, 0) -- Neon red
-                        part.Material = Enum.Material.Neon
-                        print("Colored glass_weak part: " .. part.Name)
                     end
                 end
             end
         end
     end
-    print("Coloring completed: glass_tempered (neon green), glass_weak (neon red).")
+    print("Coloring completed: glass_tempered (neon green).")
 else
     -- Show decorative notification on script start
     Rayfield:Notify({
@@ -69,53 +56,57 @@ else
 
         -- ================== SHARED VARS ==================
         local glassEspEnabled = false
-        local glassEspLoop = nil
         local originalProps = {} -- [part] = {Color=..., Material=...}
         local GlassEspToggle = nil -- Reference to Glass ESP toggle
         local floatingButton = nil -- Reference to the floating button UI
         local floatingButtonToggle = nil -- Reference to the mobile toggle
         local stroke = nil -- Reference to the UIStroke for borders
+        local cachedParts = { tempered = {} } -- Cache for parts to color
+        local detectorToggle = nil -- Reference to Detector toggle
+        local detectorEnabled = false
+        local detectorOriginalParent = nil
+        local detectorInstance = nil
+        local correctAllToggle = nil -- Reference to Correct All toggle
 
-        local function applyGlassEspOnce()
+        -- Cache parts to color
+        local function cacheParts()
+            cachedParts.tempered = {}
             for _, step in pairs(workspace:GetChildren()) do
                 if step.Name == "Step" and step:IsA("Model") then
-                    -- Color glass_tempered neon green
                     local glassTempered = step:FindFirstChild("glass_tempered")
                     if glassTempered then
                         for _, part in pairs(glassTempered:GetDescendants()) do
                             if part:IsA("BasePart") or part:IsA("MeshPart") then
+                                table.insert(cachedParts.tempered, part)
                                 if not originalProps[part] then
                                     originalProps[part] = { Color = part.Color, Material = part.Material }
                                 end
-                                part.Color = Color3.fromRGB(0, 255, 0) -- Neon green
-                                part.Material = Enum.Material.Neon
-                                print("Colored glass_tempered part: " .. part.Name)
                             end
                         end
-                    else
-                        warn("glass_tempered not found in Step: " .. step.Name)
                     end
+                end
+            end
+            if #cachedParts.tempered == 0 then
+                Rayfield:Notify({
+                    Title = "Warning",
+                    Content = "No glass_tempered found in workspace.",
+                    Duration = 5,
+                    Image = "rbxassetid://4483345998"
+                })
+            end
+        end
 
-                    -- Color glass_weak neon red
-                    local glassWeak = step:FindFirstChild("glass_weak")
-                    if glassWeak then
-                        for _, part in pairs(glassWeak:GetDescendants()) do
-                            if part:IsA("BasePart") or part:IsA("MeshPart") then
-                                if not originalProps[part] then
-                                    originalProps[part] = { Color = part.Color, Material = part.Material }
-                                end
-                                part.Color = Color3.fromRGB(255, 0, 0) -- Neon red
-                                part.Material = Enum.Material.Neon
-                                print("Colored glass_weak part: " .. part.Name)
-                            end
-                        end
-                    else
-                        warn("glass_weak not found in Step: " .. step.Name)
-                    end
+        -- Apply ESP to cached parts
+        local function applyGlassEsp()
+            for _, part in pairs(cachedParts.tempered) do
+                if part and part.Parent then
+                    part.Color = Color3.fromRGB(0, 255, 0) -- Neon green
+                    part.Material = Enum.Material.Neon
                 end
             end
         end
 
+        -- Reset ESP
         local function resetGlassEsp()
             for part, props in pairs(originalProps) do
                 if typeof(part) == "Instance" and part and part.Parent then
@@ -125,48 +116,34 @@ else
             end
             if not glassEspEnabled then
                 originalProps = {}
-            end
-            print("Reset colors for all parts.")
-        end
-
-        local function startGlassEspLoop()
-            if glassEspLoop then return end
-            glassEspLoop = task.spawn(function()
-                while glassEspEnabled do
-                    applyGlassEspOnce()
-                    task.wait(0.1) -- Fast update for dynamic changes
-                end
-            end)
-            if stroke then
-                stroke.Color = Color3.fromRGB(0, 255, 0) -- Green borders when active
+                cachedParts.tempered = {}
             end
         end
 
-        local function stopGlassEspLoop()
-            glassEspEnabled = false
-            resetGlassEsp()
-            glassEspLoop = nil
-            if stroke then
-                stroke.Color = Color3.fromRGB(0, 0, 0) -- Black borders when inactive
-            end
-        end
-
+        -- Toggle ESP
         local function toggleGlassEsp()
             glassEspEnabled = not glassEspEnabled
             if GlassEspToggle then GlassEspToggle:Set(glassEspEnabled) end
             if glassEspEnabled then
-                startGlassEspLoop()
+                cacheParts()
+                applyGlassEsp()
+                if stroke then
+                    stroke.Color = Color3.fromRGB(0, 255, 0) -- Green borders
+                end
                 Rayfield:Notify({
                     Title = "Success",
-                    Content = "glass_tempered (neon green) and glass_weak (neon red) enabled.",
+                    Content = "glass_tempered (neon green) enabled.",
                     Duration = 3,
                     Image = "rbxassetid://4483345998"
                 })
             else
-                stopGlassEspLoop()
+                resetGlassEsp()
+                if stroke then
+                    stroke.Color = Color3.fromRGB(0, 0, 0) -- Black borders
+                end
                 Rayfield:Notify({
                     Title = "Reset",
-                    Content = "glass_tempered and glass_weak reset to original colors.",
+                    Content = "glass_tempered reset to original colors.",
                     Duration = 3,
                     Image = "rbxassetid://4483345998"
                 })
@@ -180,6 +157,7 @@ else
             local screenGui = Instance.new("ScreenGui")
             screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
             screenGui.IgnoreGuiInset = true
+            screenGui.ResetOnSpawn = false -- Prevent reset on death
 
             floatingButton = Instance.new("Frame")
             floatingButton.Size = UDim2.new(0, 60, 0, 60)
@@ -194,7 +172,7 @@ else
 
             stroke = Instance.new("UIStroke")
             stroke.Thickness = 2
-            stroke.Color = Color3.fromRGB(0, 0, 0) -- Black borders initially
+            stroke.Color = glassEspEnabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(0, 0, 0) -- Sync with ESP state
             stroke.Parent = floatingButton
 
             local textLabel = Instance.new("TextLabel")
@@ -246,13 +224,6 @@ else
                     update(input)
                 end
             end)
-
-            -- Sync with ESP state
-            if glassEspEnabled then
-                stroke.Color = Color3.fromRGB(0, 255, 0)
-            else
-                stroke.Color = Color3.fromRGB(0, 0, 0)
-            end
         end
 
         -- Function to destroy the floating button
@@ -262,6 +233,99 @@ else
                 floatingButton = nil
                 stroke = nil
             end
+        end
+
+        -- Recreate floating button on character respawn
+        LocalPlayer.CharacterAdded:Connect(function()
+            if floatingButtonToggle and floatingButtonToggle.CurrentValue then
+                createFloatingButton()
+            end
+        end)
+
+        -- Handle Detector toggle
+        local function toggleDetector()
+            detectorEnabled = not detectorEnabled
+            if detectorToggle then detectorToggle:Set(detectorEnabled) end
+            local step = workspace:GetChildren()[234]
+            if not step or step.Name ~= "Step" or not step:IsA("Model") then
+                Rayfield:Notify({
+                    Title = "Error",
+                    Content = "Step[234] not found or invalid.",
+                    Duration = 5,
+                    Image = "rbxassetid://4483345998"
+                })
+                return
+            end
+            local glassWeak = step:FindFirstChild("glass_weak")
+            if not glassWeak then
+                Rayfield:Notify({
+                    Title = "Error",
+                    Content = "glass_weak not found in Step[234].",
+                    Duration = 5,
+                    Image = "rbxassetid://4483345998"
+                })
+                return
+            end
+            local detector = glassWeak:FindFirstChild("Detector")
+            if detectorEnabled then
+                if detector then
+                    detectorOriginalParent = detector.Parent
+                    detectorInstance = detector
+                    detector.Parent = nil -- Remove from game
+                    Rayfield:Notify({
+                        Title = "Success",
+                        Content = "Detector removed.",
+                        Duration = 3,
+                        Image = "rbxassetid://4483345998"
+                    })
+                else
+                    Rayfield:Notify({
+                        Title = "Error",
+                        Content = "Detector not found in glass_weak.",
+                        Duration = 5,
+                        Image = "rbxassetid://4483345998"
+                    })
+                end
+            else
+                if detectorInstance and detectorOriginalParent then
+                    detectorInstance.Parent = detectorOriginalParent -- Restore
+                    Rayfield:Notify({
+                        Title = "Success",
+                        Content = "Detector restored.",
+                        Duration = 3,
+                        Image = "rbxassetid://4483345998"
+                    })
+                end
+            end
+        end
+
+        -- Correct All (convert glass_weak to glass_tempered)
+        local function correctAllGlass()
+            for _, step in pairs(workspace:GetChildren()) do
+                if step.Name == "Step" and step:IsA("Model") then
+                    local glassWeak = step:FindFirstChild("glass_weak")
+                    if glassWeak then
+                        glassWeak.Name = "glass_tempered"
+                        for _, part in pairs(glassWeak:GetDescendants()) do
+                            if part:IsA("BasePart") or part:IsA("MeshPart") then
+                                part.CanCollide = true
+                                part.Material = Enum.Material.Glass
+                                part.Color = Color3.fromRGB(0, 0, 255) -- Blue
+                            end
+                        end
+                    end
+                end
+            end
+            if glassEspEnabled then
+                cacheParts()
+                applyGlassEsp()
+            end
+            Rayfield:Notify({
+                Title = "Success",
+                Content = "All glass_weak converted to glass_tempered (blue).",
+                Duration = 3,
+                Image = "rbxassetid://4483345998"
+            })
         end
 
         -- =================== TAB: MAIN ===================
@@ -274,23 +338,50 @@ else
             Callback = function(v)
                 glassEspEnabled = v
                 if v then
-                    startGlassEspLoop()
+                    cacheParts()
+                    applyGlassEsp()
+                    if stroke then
+                        stroke.Color = Color3.fromRGB(0, 255, 0)
+                    end
                     Rayfield:Notify({
                         Title = "Success",
-                        Content = "glass_tempered (neon green) and glass_weak (neon red) enabled.",
+                        Content = "glass_tempered (neon green) enabled.",
                         Duration = 3,
                         Image = "rbxassetid://4483345998"
                     })
                 else
-                    stopGlassEspLoop()
+                    resetGlassEsp()
+                    if stroke then
+                        stroke.Color = Color3.fromRGB(0, 0, 0)
+                    end
                     Rayfield:Notify({
                         Title = "Reset",
-                        Content = "glass_tempered and glass_weak reset to original colors.",
+                        Content = "glass_tempered reset to original colors.",
                         Duration = 3,
                         Image = "rbxassetid://4483345998"
                     })
                 end
             end,
+        })
+
+        TabMain:CreateSection("Detector Control")
+        detectorToggle = TabMain:CreateToggle({
+            Name = "Remove Detector",
+            CurrentValue = false,
+            Flag = "Detector_Toggle",
+            Callback = toggleDetector
+        })
+
+        TabMain:CreateSection("Correct All")
+        correctAllToggle = TabMain:CreateToggle({
+            Name = "Correct All Glass",
+            CurrentValue = false,
+            Flag = "Correct_All",
+            Callback = function(v)
+                if v then
+                    correctAllGlass()
+                end
+            end
         })
 
         TabMain:CreateSection("Configuration")
@@ -306,8 +397,20 @@ else
             Callback = function(v)
                 if v then
                     createFloatingButton()
+                    Rayfield:Notify({
+                        Title = "Success",
+                        Content = "Floating button enabled.",
+                        Duration = 3,
+                        Image = "rbxassetid://4483345998"
+                    })
                 else
                     destroyFloatingButton()
+                    Rayfield:Notify({
+                        Title = "Success",
+                        Content = "Floating button disabled.",
+                        Duration = 3,
+                        Image = "rbxassetid://4483345998"
+                    })
                 end
             end,
         })
@@ -320,9 +423,24 @@ else
             CurrentKeybind = "",
             HoldToInteract = false,
             Flag = "Keybind_GlassESP",
+            Callback = toggleGlassEsp
+        })
+        TabKeys:CreateKeybind({
+            Name = "Toggle Detector",
+            CurrentKeybind = "",
+            HoldToInteract = false,
+            Flag = "Keybind_Detector",
+            Callback = toggleDetector
+        })
+        TabKeys:CreateKeybind({
+            Name = "Correct All Glass",
+            CurrentKeybind = "",
+            HoldToInteract = false,
+            Flag = "Keybind_CorrectAll",
             Callback = function()
-                toggleGlassEsp()
-            end,
+                correctAllToggle:Set(true)
+                correctAllGlass()
+            end
         })
         TabKeys:CreateLabel("Press G to open/close the menu")
 

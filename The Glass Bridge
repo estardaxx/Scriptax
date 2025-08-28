@@ -30,7 +30,7 @@ local function createWindow()
     local Window = Rayfield:CreateWindow({
         Name = "Glass Color Menu | Scriptax",
         LoadingTitle = "Loading...",
-        LoadingSubtitle = "by TuNombre",
+        LoadingSubtitle = "by Estardax",
         ShowText = "Open Menu",
         Theme = "Serenity",
         ToggleUIKeybind = "G",
@@ -51,6 +51,13 @@ local function createWindow()
     local function getStep()
         local step = workspace:GetChildren()[115]
         if not step or step.Name ~= "Step" or not step:IsA("Model") then
+            Rayfield:Notify({
+                Title = "Error",
+                Content = "No Step model found at index 115.",
+                Duration = 5,
+                Image = "rbxassetid://4483345998"
+            })
+            warn("No Step model found at index 115.")
             return nil
         end
         return step
@@ -63,29 +70,47 @@ local function createWindow()
         -- Color glass_tempered neon green
         local glassTempered = step:FindFirstChild("glass_tempered")
         if glassTempered then
-            for _, part in ipairs(glassTempered:GetChildren()) do
-                if part:IsA("BasePart") then
+            for _, part in ipairs(glassTempered:GetDescendants()) do
+                if part:IsA("BasePart") or part:IsA("MeshPart") then
                     if not originalProps[part] then
                         originalProps[part] = { Color = part.Color, Material = part.Material }
                     end
                     part.Color = Color3.fromRGB(0, 255, 0) -- Neon green
                     part.Material = Enum.Material.Neon
+                    print("Colored glass_tempered part: " .. part.Name)
                 end
             end
+        else
+            Rayfield:Notify({
+                Title = "Warning",
+                Content = "glass_tempered not found in Step[115].",
+                Duration = 5,
+                Image = "rbxassetid://4483345998"
+            })
+            warn("glass_tempered not found in Step[115].")
         end
 
         -- Color glass_weak neon red
         local glassWeak = step:FindFirstChild("glass_weak")
         if glassWeak then
-            for _, part in ipairs(glassWeak:GetChildren()) do
-                if part:IsA("BasePart") then
+            for _, part in ipairs(glassWeak:GetDescendants()) do
+                if part:IsA("BasePart") or part:IsA("MeshPart") then
                     if not originalProps[part] then
                         originalProps[part] = { Color = part.Color, Material = part.Material }
                     end
                     part.Color = Color3.fromRGB(255, 0, 0) -- Neon red
                     part.Material = Enum.Material.Neon
+                    print("Colored glass_weak part: " .. part.Name)
                 end
             end
+        else
+            Rayfield:Notify({
+                Title = "Warning",
+                Content = "glass_weak not found in Step[115].",
+                Duration = 5,
+                Image = "rbxassetid://4483345998"
+            })
+            warn("glass_weak not found in Step[115].")
         end
     end
 
@@ -99,6 +124,7 @@ local function createWindow()
         if not glassEspEnabled then
             originalProps = {}
         end
+        print("Reset colors for all parts.")
     end
 
     local function startGlassEspLoop()
@@ -184,7 +210,7 @@ local function createWindow()
     -- ================== CREDITS ==================
     local TabCredits = Window:CreateTab("Credits", "award")
     TabCredits:CreateSection("Script Information")
-    TabCredits:CreateLabel("Glass Color Menu | Made by TuNombre ⚡")
+    TabCredits:CreateLabel("Glass Color Menu | Made by Estardax ⚡")
     TabCredits:CreateLabel("UI powered by Rayfield Library")
 
     return Window

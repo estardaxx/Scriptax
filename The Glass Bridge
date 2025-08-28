@@ -72,6 +72,9 @@ else
         local glassEspLoop = nil
         local originalProps = {} -- [part] = {Color=..., Material=...}
         local GlassEspToggle = nil -- Reference to Glass ESP toggle
+        local floatingButton = nil -- Reference to the floating button UI
+        local floatingButtonToggle = nil -- Reference to the mobile toggle
+        local stroke = nil -- Reference to the UIStroke for borders
 
         local function applyGlassEspOnce()
             for _, step in pairs(workspace:GetChildren()) do
@@ -134,12 +137,131 @@ else
                     task.wait(0.1) -- Fast update for dynamic changes
                 end
             end)
+            if stroke then
+                stroke.Color = Color3.fromRGB(0, 255, 0) -- Green borders when active
+            end
         end
 
         local function stopGlassEspLoop()
             glassEspEnabled = false
             resetGlassEsp()
             glassEspLoop = nil
+            if stroke then
+                stroke.Color = Color3.fromRGB(0, 0, 0) -- Black borders when inactive
+            end
+        end
+
+        local function toggleGlassEsp()
+            glassEspEnabled = not glassEspEnabled
+            if GlassEspToggle then GlassEspToggle:Set(glassEspEnabled) end
+            if glassEspEnabled then
+                startGlassEspLoop()
+                Rayfield:Notify({
+                    Title = "Success",
+                    Content = "glass_tempered (neon green) and glass_weak (neon red) enabled.",
+                    Duration = 3,
+                    Image = "rbxassetid://4483345998"
+                })
+            else
+                stopGlassEspLoop()
+                Rayfield:Notify({
+                    Title = "Reset",
+                    Content = "glass_tempered and glass_weak reset to original colors.",
+                    Duration = 3,
+                    Image = "rbxassetid://4483345998"
+                })
+            end
+        end
+
+        -- Function to create the floating draggable button
+        local function createFloatingButton()
+            if floatingButton then return end
+
+            local screenGui = Instance.new("ScreenGui")
+            screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+            screenGui.IgnoreGuiInset = true
+
+            floatingButton = Instance.new("Frame")
+            floatingButton.Size = UDim2.new(0, 60, 0, 60)
+            floatingButton.Position = UDim2.new(0.5, 0, 0.5, 0)
+            floatingButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255) -- White background
+            floatingButton.BorderSizePixel = 0
+            floatingButton.Parent = screenGui
+
+            local uiCorner = Instance.new("UICorner")
+            uiCorner.CornerRadius = UDim.new(1, 0) -- Fully circular
+            uiCorner.Parent = floatingButton
+
+            stroke = Instance.new("UIStroke")
+            stroke.Thickness = 2
+            stroke.Color = Color3.fromRGB(0, 0, 0) -- Black borders initially
+            stroke.Parent = floatingButton
+
+            local textLabel = Instance.new("TextLabel")
+            textLabel.Size = UDim2.new(1, 0, 1, 0)
+            textLabel.BackgroundTransparency = 1
+            textLabel.Text = "ESP"
+            textLabel.TextColor3 = Color3.fromRGB(0, 0, 0) -- Black text
+            textLabel.TextSize = 14
+            textLabel.Font = Enum.Font.SourceSansBold
+            textLabel.Parent = floatingButton
+
+            local button = Instance.new("TextButton")
+            button.Size = UDim2.new(1, 0, 1, 0)
+            button.BackgroundTransparency = 1
+            button.Text = ""
+            button.Parent = floatingButton
+            button.MouseButton1Click:Connect(toggleGlassEsp)
+
+            -- Make it draggable
+            local dragging = false
+            local dragInput, dragStart, startPos
+
+            local function update(input)
+                local delta = input.Position - dragStart
+                floatingButton.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            end
+
+            button.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    dragging = true
+                    dragStart = input.Position
+                    startPos = floatingButton.Position
+                    input.Changed:Connect(function()
+                        if input.UserInputState == Enum.UserInputState.End then
+                            dragging = false
+                        end
+                    end)
+                end
+            end)
+
+            button.InputChanged:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+                    dragInput = input
+                end
+            end)
+
+            UserInputService.InputChanged:Connect(function(input)
+                if input == dragInput and dragging then
+                    update(input)
+                end
+            end)
+
+            -- Sync with ESP state
+            if glassEspEnabled then
+                stroke.Color = Color3.fromRGB(0, 255, 0)
+            else
+                stroke.Color = Color3.fromRGB(0, 0, 0)
+            end
+        end
+
+        -- Function to destroy the floating button
+        local function destroyFloatingButton()
+            if floatingButton then
+                floatingButton.Parent:Destroy()
+                floatingButton = nil
+                stroke = nil
+            end
         end
 
         -- =================== TAB: MAIN ===================
@@ -174,6 +296,34 @@ else
         TabMain:CreateSection("Configuration")
         TabMain:CreateLabel("Settings save manually in-game.")
 
+        -- ================= TAB: MOBILE =================
+        local TabMobile = Window:CreateTab("Mobile", "smartphone")
+        TabMobile:CreateSection("Floating Button")
+        floatingButtonToggle = TabMain:CreateToggle({
+            Name = "Enable Floating Button",
+            CurrentValue = false,
+            Flag = "Floating_Button",
+            Callback = function(v)
+                if v then
+                    createFloatingButton()
+                    Rayfield:Notify({
+                        Title = "Success",
+                        Content = "Floating button enabled.",
+                        Duration = 3,
+                        Image = "rbxassetid://4483345998"
+                    })
+                else
+                    destroyFloatingButton()
+                    Rayfield:Notify({
+                        Title = "Success",
+                        Content = "Floating button disabled.",
+                        Duration = 3,
+                        Image = "rbxassetid://4483345998"
+                    })
+                end
+            end,
+        })
+
         -- ================= TAB: KEYBINDS =================
         local TabKeys = Window:CreateTab("Keybinds", "keyboard")
         TabKeys:CreateSection("Custom Keybinds")
@@ -183,25 +333,7 @@ else
             HoldToInteract = false,
             Flag = "Keybind_GlassESP",
             Callback = function()
-                glassEspEnabled = not glassEspEnabled
-                if GlassEspToggle then GlassEspToggle:Set(glassEspEnabled) end
-                if glassEspEnabled then
-                    startGlassEspLoop()
-                    Rayfield:Notify({
-                        Title = "Success",
-                        Content = "glass_tempered (neon green) and glass_weak (neon red) enabled.",
-                        Duration = 3,
-                        Image = "rbxassetid://4483345998"
-                    })
-                else
-                    stopGlassEspLoop()
-                    Rayfield:Notify({
-                        Title = "Reset",
-                        Content = "glass_tempered and glass_weak reset to original colors.",
-                        Duration = 3,
-                        Image = "rbxassetid://4483345998"
-                    })
-                end
+                toggleGlassEsp()
             end,
         })
         TabKeys:CreateLabel("Press G to open/close the menu")

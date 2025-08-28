@@ -1,149 +1,194 @@
--- Attempt to load Rayfield library from sirius.menu
-local success, Rayfield = pcall(function()
-    return loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-end)
+-- Load Rayfield from the provided source
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
--- Check if Rayfield loaded successfully
-if not success or not Rayfield then
-    warn("Failed to load Rayfield from https://sirius.menu/rayfield. Running script without UI.")
-    -- Fallback script without UI for index 115
-    local step = workspace:GetChildren()[115]
-    if step and step.Name == "Step" and step:IsA("Model") then
+-- Show decorative notification on script start
+if Rayfield and Rayfield.Notifications then
+    Rayfield:Notify({
+        Title = "Glass Color Menu",
+        Content = "Script initialized successfully.",
+        Duration = 3,
+        Image = "rbxassetid://4483345998"
+    })
+else
+    -- Fallback notification using StarterGui
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "Glass Color Menu",
+        Text = "Script initialized successfully (Rayfield Notify failed).",
+        Duration = 3
+    })
+end
+
+-- Services
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local HttpService = game:GetService("HttpService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+-- Function to create the window
+local function createWindow()
+    local Window = Rayfield:CreateWindow({
+        Name = "Glass Color Menu | Scriptax",
+        LoadingTitle = "Loading...",
+        LoadingSubtitle = "by TuNombre",
+        ShowText = "Open Menu",
+        Theme = "Serenity",
+        ToggleUIKeybind = "G",
+        KeySystem = false,
+        ConfigurationSaving = { 
+            Enabled = true, 
+            FolderName = "ScriptaxConfig", 
+            FileName = "GlassColorConfig" 
+        }
+    })
+
+    -- ================== SHARED VARS ==================
+    local glassEspEnabled = false
+    local glassEspLoop = nil
+    local originalProps = {} -- [part] = {Color=..., Material=...}
+    local GlassEspToggle = nil -- Reference to Glass ESP toggle
+
+    local function getStep()
+        local step = workspace:GetChildren()[115]
+        if not step or step.Name ~= "Step" or not step:IsA("Model") then
+            return nil
+        end
+        return step
+    end
+
+    local function applyGlassEspOnce()
+        local step = getStep()
+        if not step then return end
+        
         -- Color glass_tempered neon green
         local glassTempered = step:FindFirstChild("glass_tempered")
         if glassTempered then
-            for _, part in pairs(glassTempered:GetDescendants()) do
+            for _, part in ipairs(glassTempered:GetChildren()) do
                 if part:IsA("BasePart") then
-                    part.Color = Color3.fromRGB(0, 255, 0)
+                    if not originalProps[part] then
+                        originalProps[part] = { Color = part.Color, Material = part.Material }
+                    end
+                    part.Color = Color3.fromRGB(0, 255, 0) -- Neon green
+                    part.Material = Enum.Material.Neon
                 end
             end
         end
+
         -- Color glass_weak neon red
         local glassWeak = step:FindFirstChild("glass_weak")
         if glassWeak then
-            for _, part in pairs(glassWeak:GetDescendants()) do
+            for _, part in ipairs(glassWeak:GetChildren()) do
                 if part:IsA("BasePart") then
-                    part.Color = Color3.fromRGB(255, 0, 0)
+                    if not originalProps[part] then
+                        originalProps[part] = { Color = part.Color, Material = part.Material }
+                    end
+                    part.Color = Color3.fromRGB(255, 0, 0) -- Neon red
+                    part.Material = Enum.Material.Neon
                 end
             end
         end
-        print("Coloring completed for Step[115]: glass_tempered (neon green), glass_weak (neon red).")
-    else
-        warn("No Step model found at index 115.")
     end
-else
-    -- Create the main window with a sleek design
-    local Window = Rayfield:CreateWindow({
-        Name = "Glass Color Changer",
-        LoadingTitle = "Control Panel",
-        LoadingSubtitle = "by TuNombre",
-        ConfigurationSaving = {
-            Enabled = true,
-            FolderName = nil, -- Use default folder
-            FileName = "GlassColorConfig"
-        },
-        Discord = {
-            Enabled = false
-        },
-        KeySystem = false
-    })
 
-    -- Create a tab for coloring controls
-    local Tab = Window:CreateTab("Color Controls", 4483362458)
+    local function resetGlassEsp()
+        for part, props in pairs(originalProps) do
+            if typeof(part) == "Instance" and part and part.Parent then
+                part.Color = props.Color
+                part.Material = props.Material
+            end
+        end
+        if not glassEspEnabled then
+            originalProps = {}
+        end
+    end
 
-    -- Variable to track toggle states
-    local isTemperedColored = false
-    local isWeakColored = false
+    local function startGlassEspLoop()
+        if glassEspLoop then return end
+        glassEspLoop = task.spawn(function()
+            while glassEspEnabled do
+                applyGlassEspOnce()
+                task.wait(0.1) -- Fast update for dynamic changes
+            end
+        end)
+    end
 
-    -- Function to color glass_tempered neon green
-    local function toggleTemperedColor()
-        local step = workspace:GetChildren()[115]
-        if step and step.Name == "Step" and step:IsA("Model") then
-            local glassTempered = step:FindFirstChild("glass_tempered")
-            if glassTempered then
-                for _, part in pairs(glassTempered:GetDescendants()) do
-                    if part:IsA("BasePart") then
-                        part.Color = isTemperedColored and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(0, 255, 0)
-                    end
-                end
-                isTemperedColored = not isTemperedColored
+    local function stopGlassEspLoop()
+        glassEspEnabled = false
+        resetGlassEsp()
+        glassEspLoop = nil
+    end
+
+    -- =================== TAB: MAIN ===================
+    local TabMain = Window:CreateTab("Main", "layers")
+    TabMain:CreateSection("Glass Coloring")
+    GlassEspToggle = TabMain:CreateToggle({
+        Name = "Glass ESP",
+        CurrentValue = false,
+        Flag = "Glass_ESP",
+        Callback = function(v)
+            glassEspEnabled = v
+            if v then
+                startGlassEspLoop()
                 Rayfield:Notify({
-                    Title = isTemperedColored and "Success" or "Reset",
-                    Content = isTemperedColored and "glass_tempered in Step[115] colored neon green." or "glass_tempered in Step[115] reset to white.",
+                    Title = "Success",
+                    Content = "glass_tempered (neon green) and glass_weak (neon red) in Step[115] enabled.",
                     Duration = 3,
-                    Image = 4483362458
+                    Image = "rbxassetid://4483345998"
                 })
             else
+                stopGlassEspLoop()
                 Rayfield:Notify({
-                    Title = "Error",
-                    Content = "glass_tempered not found in Step[115].",
+                    Title = "Reset",
+                    Content = "glass_tempered and glass_weak in Step[115] reset to original colors.",
                     Duration = 3,
-                    Image = 4483362458
+                    Image = "rbxassetid://4483345998"
                 })
             end
-        else
-            Rayfield:Notify({
-                Title = "Error",
-                Content = "No Step model found at index 115.",
-                Duration = 3,
-                Image = 4483362458
-            })
-        end
-    end
+        end,
+    })
 
-    -- Function to color glass_weak neon red
-    local function toggleWeakColor()
-        local step = workspace:GetChildren()[115]
-        if step and step.Name == "Step" and step:IsA("Model") then
-            local glassWeak = step:FindFirstChild("glass_weak")
-            if glassWeak then
-                for _, part in pairs(glassWeak:GetDescendants()) do
-                    if part:IsA("BasePart") then
-                        part.Color = isWeakColored and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(255, 0, 0)
-                    end
-                end
-                isWeakColored = not isWeakColored
+    TabMain:CreateSection("Configuration")
+    TabMain:CreateLabel("Settings save manually in-game.")
+
+    -- ================= TAB: KEYBINDS =================
+    local TabKeys = Window:CreateTab("Keybinds", "keyboard")
+    TabKeys:CreateSection("Custom Keybinds")
+    TabKeys:CreateKeybind({
+        Name = "Toggle Glass ESP",
+        CurrentKeybind = "",
+        HoldToInteract = false,
+        Flag = "Keybind_GlassESP",
+        Callback = function()
+            glassEspEnabled = not glassEspEnabled
+            if GlassEspToggle then GlassEspToggle:Set(glassEspEnabled) end
+            if glassEspEnabled then
+                startGlassEspLoop()
                 Rayfield:Notify({
-                    Title = isWeakColored and "Success" or "Reset",
-                    Content = isWeakColored and "glass_weak in Step[115] colored neon red." or "glass_weak in Step[115] reset to white.",
+                    Title = "Success",
+                    Content = "glass_tempered (neon green) and glass_weak (neon red) in Step[115] enabled.",
                     Duration = 3,
-                    Image = 4483362458
+                    Image = "rbxassetid://4483345998"
                 })
             else
+                stopGlassEspLoop()
                 Rayfield:Notify({
-                    Title = "Error",
-                    Content = "glass_weak not found in Step[115].",
+                    Title = "Reset",
+                    Content = "glass_tempered and glass_weak in Step[115] reset to original colors.",
                     Duration = 3,
-                    Image = 4483362458
+                    Image = "rbxassetid://4483345998"
                 })
             end
-        else
-            Rayfield:Notify({
-                Title = "Error",
-                Content = "No Step model found at index 115.",
-                Duration = 3,
-                Image = 4483362458
-            })
-        end
-    end
-
-    -- Toggle for coloring glass_tempered neon green
-    Tab:CreateToggle({
-        Name = "Toggle Neon Green for glass_tempered",
-        CurrentValue = false,
-        Flag = "TemperedToggle",
-        Callback = function(Value)
-            toggleTemperedColor()
-        end
+        end,
     })
+    TabKeys:CreateLabel("Press G to open/close the menu")
 
-    -- Toggle for coloring glass_weak neon red
-    Tab:CreateToggle({
-        Name = "Toggle Neon Red for glass_weak",
-        CurrentValue = false,
-        Flag = "WeakToggle",
-        Callback = function(Value)
-            toggleWeakColor()
-        end
-    })
+    -- ================== CREDITS ==================
+    local TabCredits = Window:CreateTab("Credits", "award")
+    TabCredits:CreateSection("Script Information")
+    TabCredits:CreateLabel("Glass Color Menu | Made by TuNombre ⚡")
+    TabCredits:CreateLabel("UI powered by Rayfield Library")
+
+    return Window
 end
+
+-- Initial creation with default profile
+createWindow()

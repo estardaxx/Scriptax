@@ -63,40 +63,30 @@ else
         local floatingCorrectButtonToggle = nil -- Reference to the Correct All mobile toggle
         local espStroke = nil -- Reference to the ESP UIStroke for borders
         local correctStroke = nil -- Reference to the Correct All UIStroke for borders
-        
-        -- ChildAdded connection for dynamic steps (for ESP) - Mejorado con delay
-        local childAddedConnection = workspace.ChildAdded:Connect(function(child)
+        local childAddedConnection = nil -- Reference to ChildAdded connection
+        local heartbeatConnection = nil -- Reference to Heartbeat connection
+
+        -- ChildAdded connection for dynamic steps (for ESP)
+        childAddedConnection = workspace.ChildAdded:Connect(function(child)
             if child.Name == "Step" and child:IsA("Model") then
-                task.wait(0.5) -- Espera para que se carguen hijos
+                task.wait(0.5) -- Wait for children to load
                 if glassEspEnabled then
                     applyToStepEsp(child)
-                    print("Debug: Aplicando ESP a nuevo Step via ChildAdded: " .. child.Name) -- Debug opcional
+                    print("Debug: Applying ESP to new Step via ChildAdded: " .. child.Name)
                 end
             end
         end)
 
-        -- To handle resets/reinits of glasses without lag, use a lightweight heartbeat check every 2 seconds
-        local lastCheckTime = 0
-        local checkInterval = 2 -- Cada 2 segundos para capturar resets rápidos, sin lag
-        RunService.Heartbeat:Connect(function()
-            if glassEspEnabled and os.clock() - lastCheckTime >= checkInterval then
-                lastCheckTime = os.clock()
-                originalTempered = {} -- Limpia para forzar coloreo de nuevos parts
-                applyGlassEsp()
-                print("Debug: Reaplicando ESP via Heartbeat") -- Debug opcional
-            end
-        end)
-
-        -- Apply ESP to a single step (Mejorado con retry si glass_tempered no existe aún)
+        -- Apply ESP to a single step
         local function applyToStepEsp(step)
             local glassTempered = step:FindFirstChild("glass_tempered")
             if not glassTempered then
-                task.wait(0.1) -- Retry breve
+                task.wait(0.1) -- Retry once
                 glassTempered = step:FindFirstChild("glass_tempered")
             end
             if glassTempered then
                 for _, part in pairs(glassTempered:GetDescendants()) do
-                    if part:IsA("BasePart") or part:IsA("MeshPart") then
+                    if (part:IsA("BasePart") or part:IsA("MeshPart")) and part:IsDescendantOf(workspace) then
                         if not originalTempered[part] then
                             originalTempered[part] = { Color = part.Color, Material = part.Material }
                         end
@@ -104,9 +94,50 @@ else
                         part.Material = Enum.Material.Neon
                     end
                 end
-                print("Debug: ESP aplicado a glass_tempered en " .. step.Name) -- Debug opcional
+                print("Debug: ESP applied to glass_tempered in " .. step.Name)
             end
         end
+
+        -- Apply ESP to all current steps
+        local function applyGlassEsp()
+            for _, step in pairs(workspace:GetChildren()) do
+                if step.Name == "Step" and step:IsA("Model") then
+                    applyToStepEsp(step)
+                end
+            end
+        end
+
+        -- Reset ESP
+        local function resetGlassEsp()
+            for part, props in pairs(originalTempered) do
+                if part and part:IsDescendantOf(workspace) then
+                    part.Color = props.Color
+                    part.Material = props.Material
+                end
+            end
+            -- Do NOT clear originalTempered to preserve original properties
+        end
+
+        -- Clean up originalTempered to remove entries for destroyed parts
+        local function cleanOriginalTempered()
+            for part in pairs(originalTempered) do
+                if not part:IsDescendantOf(workspace) then
+                    originalTempered[part] = nil
+                end
+            end
+        end
+
+        -- Periodic check to reapply ESP to new parts and clean up
+        local lastCheckTime = 0
+        local checkInterval = 2 -- Check every 2 seconds
+        heartbeatConnection = RunService.Heartbeat:Connect(function()
+            if glassEspEnabled and os.clock() - lastCheckTime >= checkInterval then
+                lastCheckTime = os.clock()
+                cleanOriginalTempered() -- Clean up destroyed parts
+                applyGlassEsp() -- Reapply ESP to ensure new parts are colored
+                print("Debug: Reapplying ESP via Heartbeat")
+            end
+        end)
 
         -- Function to destroy detectors and color glass_weak (one-time execution)
         local function executeCorrectAll()
@@ -138,28 +169,8 @@ else
             })
         end
 
-        -- Apply ESP to all current steps
-        local function applyGlassEsp()
-            for _, step in pairs(workspace:GetChildren()) do
-                if step.Name == "Step" and step:IsA("Model") then
-                    applyToStepEsp(step)
-                end
-            end
-        end
-
-        -- Reset ESP
-        local function resetGlassEsp()
-            for part, props in pairs(originalTempered) do
-                if part and part:IsDescendantOf(workspace) then
-                    part.Color = props.Color
-                    part.Material = props.Material
-                end
-            end
-            originalTempered = {} -- Clear after reset
-        end
-
         -- Toggle ESP
-        function toggleGlassEsp()
+        local function toggleGlassEsp()
             glassEspEnabled = not glassEspEnabled
             if GlassEspToggle then GlassEspToggle:Set(glassEspEnabled) end
             if glassEspEnabled then
@@ -263,7 +274,7 @@ else
             end)
         end
 
-        -- Function to create the Correct All floating draggable button (one-time execution)
+        -- Function to create the Correct All floating draggable button
         local function createFloatingCorrectButton()
             if floatingCorrectButton then return end
 
@@ -309,7 +320,7 @@ else
                 correctStroke.Color = Color3.fromRGB(0, 0, 0) -- Back to black
             end)
 
-            -- Make it draggable (same as ESP)
+            -- Make it draggable
             local dragging = false
             local dragInput, dragStart, startPos
 
@@ -379,6 +390,19 @@ else
             if glassEspEnabled then
                 applyGlassEsp()
             end
+        end)
+
+        -- Clean up on script termination
+        game:BindToClose(function()
+            if childAddedConnection then
+                childAddedConnection:Disconnect()
+            end
+            if heartbeatConnection then
+                heartbeatConnection:Disconnect()
+            end
+            resetGlassEsp()
+            destroyFloatingEspButton()
+            destroyFloatingCorrectButton()
         end)
 
         -- =================== TAB: MAIN ===================

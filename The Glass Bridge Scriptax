@@ -412,7 +412,7 @@ else
 
         TabMain:CreateSection("Correct All")
         TabMain:CreateButton({
-            Name = "Apply Correct All (One-Shot)",
+            Name = "Apply Correct All",
             Callback = applyCorrectAll
         })
 

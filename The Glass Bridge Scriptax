@@ -440,12 +440,9 @@ else
 
         TabMain:CreateSection("Correct All")
         TabMain:CreateButton({
-            Name = "Apply Correct All (One-Shot)",
+            Name = "Apply Correct All",
             Callback = applyCorrectAll
         })
-
-        TabMain:CreateSection("Configuration")
-        TabMain:CreateLabel("Settings save manually in-game.")
 
         -- ================= TAB: MOBILE =================
         local TabMobile = Window:CreateTab("Mobile", "smartphone")

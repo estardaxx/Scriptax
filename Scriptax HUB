@@ -1,8 +1,9 @@
 -- Modern UI Library inspired by Rayfield
--- Theme: White and Bright (Serenity-like)
--- Created by Grok for Roblox scripts
+-- Theme: White and Bright (Serenity-like with enhancements)
+-- Created by Grok for Roblox scripts - High Quality Version with more features
+-- Features: Window dragging, Multiple tabs with buttons, Configuration saving (simulated), More elements (Button, Slider, Dropdown, Keybind, Label), Better animations, Notifications stack
 -- Usage: local UI = loadstring(game:HttpGet("your_raw_url_here"))() -- Replace with actual URL if hosting
--- Then: local Window = UI:CreateWindow({Name = "My UI", LoadingTitle = "Loading...", LoadingSubtitle = "Powered by Grok"})
+-- Then: local Window = UI:CreateWindow({Name = "My UI", LoadingTitle = "Loading...", LoadingSubtitle = "Powered by Grok", ToggleUIKeybind = "RightShift", ConfigurationSaving = {Enabled = true, FolderName = "MyConfig", FileName = "Settings"}})
 
 local ModernUI = {}
 ModernUI.__index = ModernUI
@@ -13,8 +14,9 @@ local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
+local HttpService = game:GetService("HttpService")
 
--- Theme Colors (White and Bright)
+-- Theme Colors (White and Bright, enhanced)
 local Theme = {
     Background = Color3.fromRGB(255, 255, 255), -- White
     Accent = Color3.fromRGB(0, 170, 255), -- Bright blue
@@ -22,7 +24,9 @@ local Theme = {
     Secondary = Color3.fromRGB(240, 240, 240), -- Light gray
     Border = Color3.fromRGB(200, 200, 200), -- Soft border
     Notification = Color3.fromRGB(255, 255, 255),
-    Glow = Color3.fromRGB(0, 255, 255) -- Bright glow for highlights
+    Glow = Color3.fromRGB(0, 255, 255), -- Bright glow for highlights
+    SliderFill = Color3.fromRGB(0, 200, 255), -- Brighter fill
+    Dropdown = Color3.fromRGB(220, 220, 220)
 }
 
 -- Helper Functions
@@ -38,22 +42,44 @@ local function tween(obj, props, time, easing)
     TweenService:Create(obj, TweenInfo.new(time or 0.3, easing or Enum.EasingStyle.Quad, Enum.EasingDirection.Out), props):Play()
 end
 
--- Notification Function
+-- Configuration Saving (Simulated with LocalPlayer attributes for simplicity; in real, use DataStore)
+local function saveConfig(folder, file, data)
+    -- Simulate saving
+    local json = HttpService:JSONEncode(data)
+    print("Simulated save: " .. folder .. "/" .. file .. ": " .. json)
+    -- In real Rayfield, uses files; here placeholder
+end
+
+local function loadConfig(folder, file)
+    -- Simulate loading
+    return {} -- Placeholder
+end
+
+-- Notification Function (Enhanced: Stacking notifications)
+local notifications = {}
 function ModernUI:Notify(options)
-    local notify = createInstance("ScreenGui", {Parent = LocalPlayer.PlayerGui, ResetOnSpawn = false})
+    local notify = createInstance("ScreenGui", {Parent = LocalPlayer.PlayerGui, ResetOnSpawn = false, IgnoreGuiInset = true})
     local frame = createInstance("Frame", {
-        Size = UDim2.new(0, 300, 0, 50),
-        Position = UDim2.new(1, -310, 1, -60),
+        Size = UDim2.new(0, 300, 0, 70),
+        Position = UDim2.new(1, 10, 1, - (80 * #notifications + 10)),
         BackgroundColor3 = Theme.Notification,
         BorderSizePixel = 0,
         Parent = notify
     })
     createInstance("UICorner", {CornerRadius = UDim.new(0, 8), Parent = frame})
     createInstance("UIStroke", {Color = Theme.Border, Thickness = 1, Parent = frame})
+    createInstance("ImageLabel", {
+        Image = options.Image or "",
+        Size = UDim2.new(0, 40, 0, 40),
+        Position = UDim2.new(0, 10, 0.5, -20),
+        BackgroundTransparency = 1,
+        Parent = frame
+    })
 
     local title = createInstance("TextLabel", {
         Text = options.Title or "Notification",
-        Size = UDim2.new(1, 0, 0.5, 0),
+        Position = UDim2.new(0, 60, 0, 10),
+        Size = UDim2.new(1, -70, 0, 20),
         BackgroundTransparency = 1,
         TextColor3 = Theme.Text,
         Font = Enum.Font.SourceSansBold,
@@ -63,8 +89,8 @@ function ModernUI:Notify(options)
 
     local content = createInstance("TextLabel", {
         Text = options.Content or "Message",
-        Size = UDim2.new(1, 0, 0.5, 0),
-        Position = UDim2.new(0, 0, 0.5, 0),
+        Position = UDim2.new(0, 60, 0, 30),
+        Size = UDim2.new(1, -70, 0, 30),
         BackgroundTransparency = 1,
         TextColor3 = Theme.Text,
         Font = Enum.Font.SourceSans,
@@ -72,30 +98,35 @@ function ModernUI:Notify(options)
         Parent = frame
     })
 
-    tween(frame, {Position = UDim2.new(1, -310, 1, -60 - 60)}, 0.5) -- Slide in
-    wait(options.Duration or 3)
-    tween(frame, {Position = UDim2.new(1, 0, 1, -60 - 60)}, 0.5)
-    wait(0.5)
+    table.insert(notifications, frame)
+    tween(frame, {Position = UDim2.new(1, -310, frame.Position.Y.Scale, frame.Position.Y.Offset)}, 0.5)
+    task.wait(options.Duration or 4)
+    tween(frame, {Position = UDim2.new(1, 10, frame.Position.Y.Scale, frame.Position.Y.Offset)}, 0.5)
+    task.wait(0.5)
     notify:Destroy()
+    table.remove(notifications, table.find(notifications, frame))
 end
 
 -- Create Window
 function ModernUI:CreateWindow(options)
     local self = setmetatable({}, ModernUI)
+    self.Options = options
     self.Tabs = {}
+    self.TabButtons = {}
     self.Keybind = options.ToggleUIKeybind or "RightShift"
+    self.ConfigSaving = options.ConfigurationSaving or {Enabled = false}
 
     -- Main ScreenGui
-    self.ScreenGui = createInstance("ScreenGui", {Parent = LocalPlayer.PlayerGui, ResetOnSpawn = false})
+    self.ScreenGui = createInstance("ScreenGui", {Parent = LocalPlayer.PlayerGui, ResetOnSpawn = false, IgnoreGuiInset = true})
 
-    -- Loading Screen (optional)
+    -- Loading Screen
     if options.LoadingTitle then
         local loading = createInstance("Frame", {
             Size = UDim2.new(1, 0, 1, 0),
             BackgroundColor3 = Theme.Background,
             Parent = self.ScreenGui
         })
-        createInstance("TextLabel", {
+        local title = createInstance("TextLabel", {
             Text = options.LoadingTitle,
             Size = UDim2.new(1, 0, 0.5, 0),
             BackgroundTransparency = 1,
@@ -104,7 +135,7 @@ function ModernUI:CreateWindow(options)
             TextSize = 24,
             Parent = loading
         })
-        createInstance("TextLabel", {
+        local subtitle = createInstance("TextLabel", {
             Text = options.LoadingSubtitle or "",
             Position = UDim2.new(0, 0, 0.5, 0),
             Size = UDim2.new(1, 0, 0.5, 0),
@@ -114,14 +145,17 @@ function ModernUI:CreateWindow(options)
             TextSize = 18,
             Parent = loading
         })
-        wait(2) -- Simulate loading
+        tween(title, {TextTransparency = 0}, 1)
+        task.wait(2)
+        tween(loading, {BackgroundTransparency = 1}, 0.5)
+        task.wait(0.5)
         loading:Destroy()
     end
 
     -- Main Window
     self.Window = createInstance("Frame", {
-        Size = UDim2.new(0, 500, 0, 300),
-        Position = UDim2.new(0.5, -250, 0.5, -150),
+        Size = UDim2.new(0, 550, 0, 350),
+        Position = UDim2.new(0.5, -275, 0.5, -175),
         BackgroundColor3 = Theme.Background,
         BorderSizePixel = 0,
         Visible = false,
@@ -129,23 +163,67 @@ function ModernUI:CreateWindow(options)
     })
     createInstance("UICorner", {CornerRadius = UDim.new(0, 8), Parent = self.Window})
     createInstance("UIStroke", {Color = Theme.Border, Thickness = 1, Parent = self.Window})
-    createInstance("TextLabel", {
-        Text = options.Name or "Modern UI",
+
+    -- Title Bar
+    local titleBar = createInstance("Frame", {
         Size = UDim2.new(1, 0, 0, 30),
         BackgroundColor3 = Theme.Secondary,
+        BorderSizePixel = 0,
+        Parent = self.Window
+    })
+    createInstance("TextLabel", {
+        Text = options.Name or "Modern UI",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
         TextColor3 = Theme.Text,
         Font = Enum.Font.SourceSansBold,
         TextSize = 20,
-        Parent = self.Window
+        Parent = titleBar
     })
 
-    -- Tab Container
-    self.TabContainer = createInstance("ScrollingFrame", {
-        Size = UDim2.new(1, 0, 1, -30),
+    -- Make Window Draggable
+    local dragging, dragStart, startPos
+    titleBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = self.Window.Position
+        end
+    end)
+    titleBar.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - dragStart
+            self.Window.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+
+    -- Tab Button Container
+    self.TabButtonContainer = createInstance("Frame", {
+        Size = UDim2.new(1, 0, 0, 30),
         Position = UDim2.new(0, 0, 0, 30),
-        BackgroundTransparency = 1,
-        ScrollBarThickness = 0,
+        BackgroundColor3 = Theme.Secondary,
         Parent = self.Window
+    })
+    local tabUIList = createInstance("UIListLayout", {FillDirection = Enum.FillDirection.Horizontal, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 5), Parent = self.TabButtonContainer})
+
+    -- Tab Content Container
+    self.TabContentContainer = createInstance("Frame", {
+        Size = UDim2.new(1, 0, 1, -60),
+        Position = UDim2.new(0, 0, 0, 60),
+        BackgroundTransparency = 1,
+        Parent = self.Window
+    })
+    self.TabScrollingFrame = createInstance("ScrollingFrame", {
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        ScrollBarThickness = 4,
+        ScrollBarImageColor3 = Theme.Accent,
+        Parent = self.TabContentContainer
     })
 
     -- Keybind to toggle UI
@@ -155,24 +233,66 @@ function ModernUI:CreateWindow(options)
         end
     end)
 
+    -- Load Config if enabled
+    if self.ConfigSaving.Enabled then
+        self.Config = loadConfig(self.ConfigSaving.FolderName, self.ConfigSaving.FileName)
+    else
+        self.Config = {}
+    end
+
     return self
 end
 
 -- Create Tab
-function ModernUI:CreateTab(name)
-    local tab = createInstance("Frame", {
+function ModernUI:CreateTab(name, icon)
+    local tabFrame = createInstance("ScrollingFrame", {
         Size = UDim2.new(1, 0, 1, 0),
         BackgroundTransparency = 1,
+        ScrollBarThickness = 4,
+        ScrollBarImageColor3 = Theme.Accent,
         Visible = false,
-        Parent = self.TabContainer
+        Parent = self.TabScrollingFrame
     })
-    local sectionContainer = createInstance("UIListLayout", {SortOrder = Enum.SortOrder.LayoutOrder, Parent = tab})
+    local listLayout = createInstance("UIListLayout", {SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 5), Parent = tabFrame})
+    local padding = createInstance("UIPadding", {PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), PaddingTop = UDim.new(0, 10), PaddingBottom = UDim.new(0, 10), Parent = tabFrame})
 
-    table.insert(self.Tabs, {Name = name, Frame = tab})
-    -- Add tab button logic here if multiple tabs (simplified for one tab)
+    -- Tab Button
+    local tabButton = createInstance("TextButton", {
+        Size = UDim2.new(0, 100, 1, 0),
+        BackgroundColor3 = Theme.Background,
+        Text = name,
+        TextColor3 = Theme.Text,
+        Font = Enum.Font.SourceSansSemibold,
+        TextSize = 16,
+        AutoButtonColor = false,
+        Parent = self.TabButtonContainer
+    })
+    createInstance("UICorner", {CornerRadius = UDim.new(0, 4), Parent = tabButton})
+    createInstance("UIStroke", {Color = Theme.Border, Thickness = 1, Parent = tabButton})
 
-    tab.Visible = true -- Default first tab visible
-    return tab
+    tabButton.MouseButton1Click:Connect(function()
+        for _, t in pairs(self.Tabs) do
+            t.Frame.Visible = false
+        end
+        tabFrame.Visible = true
+        tween(tabButton, {BackgroundColor3 = Theme.Accent}, 0.2)
+        -- Reset other buttons
+        for _, btn in pairs(self.TabButtons) do
+            if btn ~= tabButton then
+                tween(btn, {BackgroundColor3 = Theme.Background}, 0.2)
+            end
+        end
+    end)
+
+    table.insert(self.Tabs, {Name = name, Frame = tabFrame})
+    table.insert(self.TabButtons, tabButton)
+
+    if #self.Tabs == 1 then
+        tabFrame.Visible = true
+        tabButton.BackgroundColor3 = Theme.Accent
+    end
+
+    return tabFrame
 end
 
 -- Create Section
@@ -184,15 +304,16 @@ function ModernUI:CreateSection(tab, name)
         BorderSizePixel = 0,
         Parent = tab
     })
-    createInstance("UICorner", {CornerRadius = UDim.new(0, 4), Parent = section})
+    createInstance("UICorner", {CornerRadius = UDim.new(0, 6), Parent = section})
     createInstance("UIStroke", {Color = Theme.Border, Thickness = 1, Parent = section})
-    createInstance("TextLabel", {
+    local title = createInstance("TextLabel", {
         Text = name,
-        Size = UDim2.new(1, 0, 0, 20),
+        Size = UDim2.new(1, 0, 0, 25),
         BackgroundTransparency = 1,
         TextColor3 = Theme.Text,
-        Font = Enum.Font.SourceSansSemibold,
+        Font = Enum.Font.SourceSansBold,
         TextSize = 16,
+        TextXAlignment = Enum.TextXAlignment.Left,
         Parent = section
     })
     local content = createInstance("Frame", {
@@ -201,14 +322,32 @@ function ModernUI:CreateSection(tab, name)
         BackgroundTransparency = 1,
         Parent = section
     })
-    createInstance("UIListLayout", {SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 5), Parent = content})
-    createInstance("UIPadding", {PaddingTop = UDim.new(0, 25), Parent = section})
+    local listLayout = createInstance("UIListLayout", {SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 5), Parent = content})
+    local padding = createInstance("UIPadding", {PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), PaddingTop = UDim.new(0, 30), PaddingBottom = UDim.new(0, 10), Parent = section})
 
     return content
 end
 
+-- Create Label
+function ModernUI:CreateLabel(section, text)
+    local label = createInstance("TextLabel", {
+        Text = text,
+        Size = UDim2.new(1, 0, 0, 20),
+        BackgroundTransparency = 1,
+        TextColor3 = Theme.Text,
+        Font = Enum.Font.SourceSans,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = section
+    })
+    return label
+end
+
 -- Create Toggle
 function ModernUI:CreateToggle(section, options)
+    local flag = options.Flag or options.Name
+    local state = self.Config[flag] or options.CurrentValue or false
+
     local toggle = createInstance("Frame", {
         Size = UDim2.new(1, 0, 0, 30),
         BackgroundTransparency = 1,
@@ -216,7 +355,7 @@ function ModernUI:CreateToggle(section, options)
     })
     local label = createInstance("TextLabel", {
         Text = options.Name or "Toggle",
-        Size = UDim2.new(0.8, 0, 1, 0),
+        Size = UDim2.new(1, -50, 1, 0),
         BackgroundTransparency = 1,
         TextColor3 = Theme.Text,
         Font = Enum.Font.SourceSans,
@@ -228,41 +367,282 @@ function ModernUI:CreateToggle(section, options)
     local switch = createInstance("Frame", {
         Size = UDim2.new(0, 40, 0, 20),
         Position = UDim2.new(1, -40, 0.5, -10),
-        BackgroundColor3 = Theme.Secondary,
+        BackgroundColor3 = state and Theme.Accent or Theme.Secondary,
         Parent = toggle
     })
-    createInstance("UICorner", {CornerRadius = UDim.new(0, 10), Parent = switch})
+    createInstance("UICorner", {CornerRadius = UDim.new(1, 0), Parent = switch}) -- Pill shape
     local knob = createInstance("Frame", {
-        Size = UDim2.new(0, 20, 0, 20),
+        Size = UDim2.new(0.5, 0, 1, 0),
+        Position = UDim2.new(state and 0.5 or 0, 0, 0, 0),
         BackgroundColor3 = Theme.Background,
         Parent = switch
     })
-    createInstance("UICorner", {CornerRadius = UDim.new(0, 10), Parent = knob})
-    createInstance("UIStroke", {Color = Theme.Accent, Thickness = 1, Parent = knob})
+    createInstance("UICorner", {CornerRadius = UDim.new(1, 0), Parent = knob})
+    createInstance("UIStroke", {Color = Theme.Glow, Thickness = 1, Transparency = 0.5, Parent = knob})
 
-    local state = options.CurrentValue or false
-    if state then
-        knob.Position = UDim2.new(1, -20, 0, 0)
-        switch.BackgroundColor3 = Theme.Accent
-    end
-
-    toggle.MouseButton1Click:Connect(function()
-        state = not state
-        if state then
-            tween(knob, {Position = UDim2.new(1, -20, 0, 0)}, 0.2)
-            tween(switch, {BackgroundColor3 = Theme.Accent}, 0.2)
-        else
-            tween(knob, {Position = UDim2.new(0, 0, 0, 0)}, 0.2)
-            tween(switch, {BackgroundColor3 = Theme.Secondary}, 0.2)
+    local function setState(newState)
+        state = newState
+        tween(knob, {Position = UDim2.new(state and 0.5 or 0, 0, 0, 0)}, 0.2)
+        tween(switch, {BackgroundColor3 = state and Theme.Accent or Theme.Secondary}, 0.2)
+        if self.ConfigSaving.Enabled then
+            self.Config[flag] = state
+            saveConfig(self.ConfigSaving.FolderName, self.ConfigSaving.FileName, self.Config)
         end
         if options.Callback then
             options.Callback(state)
         end
+    end
+
+    toggle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            setState(not state)
+        end
     end)
 
-    return toggle
+    setState(state) -- Initial set
+    return {Set = setState}
 end
 
--- Add more elements like Button, Slider, etc., similarly...
+-- Create Button
+function ModernUI:CreateButton(section, options)
+    local button = createInstance("TextButton", {
+        Size = UDim2.new(1, 0, 0, 30),
+        BackgroundColor3 = Theme.Accent,
+        Text = options.Name or "Button",
+        TextColor3 = Theme.Background,
+        Font = Enum.Font.SourceSansBold,
+        TextSize = 14,
+        Parent = section
+    })
+    createInstance("UICorner", {CornerRadius = UDim.new(0, 6), Parent = button})
+    createInstance("UIStroke", {Color = Theme.Glow, Thickness = 1, Parent = button})
+
+    button.MouseButton1Click:Connect(function()
+        tween(button, {BackgroundColor3 = Theme.Glow}, 0.1)
+        task.wait(0.1)
+        tween(button, {BackgroundColor3 = Theme.Accent}, 0.1)
+        if options.Callback then
+            options.Callback()
+        end
+    end)
+
+    return button
+end
+
+-- Create Slider
+function ModernUI:CreateSlider(section, options)
+    local flag = options.Flag or options.Name
+    local value = self.Config[flag] or options.CurrentValue or options.Min or 0
+
+    local slider = createInstance("Frame", {
+        Size = UDim2.new(1, 0, 0, 40),
+        BackgroundTransparency = 1,
+        Parent = section
+    })
+    local label = createInstance("TextLabel", {
+        Text = options.Name or "Slider",
+        Size = UDim2.new(1, 0, 0, 20),
+        BackgroundTransparency = 1,
+        TextColor3 = Theme.Text,
+        Font = Enum.Font.SourceSans,
+        TextSize = 14,
+        Parent = slider
+    })
+    local valueLabel = createInstance("TextLabel", {
+        Text = tostring(value),
+        Size = UDim2.new(0, 50, 0, 20),
+        Position = UDim2.new(1, -50, 0, 0),
+        BackgroundTransparency = 1,
+        TextColor3 = Theme.Text,
+        Font = Enum.Font.SourceSans,
+        TextSize = 14,
+        Parent = slider
+    })
+
+    local track = createInstance("Frame", {
+        Size = UDim2.new(1, 0, 0, 10),
+        Position = UDim2.new(0, 0, 1, -10),
+        BackgroundColor3 = Theme.Secondary,
+        Parent = slider
+    })
+    createInstance("UICorner", {CornerRadius = UDim.new(1, 0), Parent = track})
+
+    local fill = createInstance("Frame", {
+        Size = UDim2.new(0, 0, 1, 0),
+        BackgroundColor3 = Theme.SliderFill,
+        Parent = track
+    })
+    createInstance("UICorner", {CornerRadius = UDim.new(1, 0), Parent = fill})
+
+    local min, max = options.Min or 0, options.Max or 100
+    local function updateValue(newValue)
+        value = math.clamp(newValue, min, max)
+        local percent = (value - min) / (max - min)
+        tween(fill, {Size = UDim2.new(percent, 0, 1, 0)}, 0.1)
+        valueLabel.Text = tostring(value)
+        if self.ConfigSaving.Enabled then
+            self.Config[flag] = value
+            saveConfig(self.ConfigSaving.FolderName, self.ConfigSaving.FileName, self.Config)
+        end
+        if options.Callback then
+            options.Callback(value)
+        end
+    end
+
+    track.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            local mouseConnection = RunService.RenderStepped:Connect(function()
+                local mouse = UserInputService:GetMouseLocation()
+                local relative = track.AbsolutePosition.X
+                local width = track.AbsoluteSize.X
+                local percent = math.clamp((mouse.X - relative) / width, 0, 1)
+                updateValue(min + percent * (max - min))
+            end)
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    mouseConnection:Disconnect()
+                end
+            end)
+        end
+    end)
+
+    updateValue(value) -- Initial
+    return {Set = updateValue}
+end
+
+-- Create Dropdown
+function ModernUI:CreateDropdown(section, options)
+    local flag = options.Flag or options.Name
+    local selected = self.Config[flag] or options.CurrentOption or options.Options[1]
+
+    local dropdown = createInstance("Frame", {
+        Size = UDim2.new(1, 0, 0, 30),
+        BackgroundTransparency = 1,
+        Parent = section
+    })
+    local label = createInstance("TextLabel", {
+        Text = options.Name or "Dropdown",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        TextColor3 = Theme.Text,
+        Font = Enum.Font.SourceSans,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = dropdown
+    })
+
+    local selectedLabel = createInstance("TextButton", {
+        Text = selected,
+        Size = UDim2.new(0, 150, 1, 0),
+        Position = UDim2.new(1, -150, 0, 0),
+        BackgroundColor3 = Theme.Dropdown,
+        TextColor3 = Theme.Text,
+        Font = Enum.Font.SourceSans,
+        TextSize = 14,
+        Parent = dropdown
+    })
+    createInstance("UICorner", {CornerRadius = UDim.new(0, 4), Parent = selectedLabel})
+    createInstance("UIStroke", {Color = Theme.Border, Thickness = 1, Parent = selectedLabel})
+
+    local optionList = createInstance("Frame", {
+        Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        Position = UDim2.new(0, 0, 1, 5),
+        BackgroundColor3 = Theme.Background,
+        Visible = false,
+        Parent = dropdown
+    })
+    createInstance("UICorner", {CornerRadius = UDim.new(0, 4), Parent = optionList})
+    createInstance("UIStroke", {Color = Theme.Border, Thickness = 1, Parent = optionList})
+    local listLayout = createInstance("UIListLayout", {SortOrder = Enum.SortOrder.LayoutOrder, Parent = optionList})
+
+    for _, opt in pairs(options.Options or {}) do
+        local optButton = createInstance("TextButton", {
+            Text = opt,
+            Size = UDim2.new(1, 0, 0, 25),
+            BackgroundTransparency = 1,
+            TextColor3 = Theme.Text,
+            Font = Enum.Font.SourceSans,
+            TextSize = 14,
+            Parent = optionList
+        })
+        optButton.MouseButton1Click:Connect(function()
+            selected = opt
+            selectedLabel.Text = opt
+            optionList.Visible = false
+            if self.ConfigSaving.Enabled then
+                self.Config[flag] = selected
+                saveConfig(self.ConfigSaving.FolderName, self.ConfigSaving.FileName, self.Config)
+            end
+            if options.Callback then
+                options.Callback(selected)
+            end
+        end)
+    end
+
+    selectedLabel.MouseButton1Click:Connect(function()
+        optionList.Visible = not optionList.Visible
+    end)
+
+    return {Set = function(new) selectedLabel.Text = new; selected = new end}
+end
+
+-- Create Keybind
+function ModernUI:CreateKeybind(section, options)
+    local flag = options.Flag or options.Name
+    local key = self.Config[flag] or Enum.KeyCode[options.CurrentKeybind or "Unknown"]
+
+    local keybind = createInstance("Frame", {
+        Size = UDim2.new(1, 0, 0, 30),
+        BackgroundTransparency = 1,
+        Parent = section
+    })
+    local label = createInstance("TextLabel", {
+        Text = options.Name or "Keybind",
+        Size = UDim2.new(1, -100, 1, 0),
+        BackgroundTransparency = 1,
+        TextColor3 = Theme.Text,
+        Font = Enum.Font.SourceSans,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = keybind
+    })
+
+    local bindButton = createInstance("TextButton", {
+        Text = key.Name,
+        Size = UDim2.new(0, 80, 1, 0),
+        Position = UDim2.new(1, -80, 0, 0),
+        BackgroundColor3 = Theme.Secondary,
+        TextColor3 = Theme.Text,
+        Font = Enum.Font.SourceSans,
+        TextSize = 14,
+        Parent = keybind
+    })
+    createInstance("UICorner", {CornerRadius = UDim.new(0, 4), Parent = bindButton})
+    createInstance("UIStroke", {Color = Theme.Border, Thickness = 1, Parent = bindButton})
+
+    local binding = false
+    bindButton.MouseButton1Click:Connect(function()
+        bindButton.Text = "..."
+        binding = true
+    end)
+
+    UserInputService.InputBegan:Connect(function(input)
+        if binding and input.KeyCode ~= Enum.KeyCode.Unknown then
+            key = input.KeyCode
+            bindButton.Text = key.Name
+            binding = false
+            if self.ConfigSaving.Enabled then
+                self.Config[flag] = key.Name
+                saveConfig(self.ConfigSaving.FolderName, self.ConfigSaving.FileName, self.Config)
+            end
+            if options.Callback then
+                options.Callback(key)
+            end
+        end
+    end)
+
+    return bindButton
+end
 
 return ModernUI

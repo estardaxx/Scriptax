@@ -77,7 +77,12 @@ else
         local childRemovedConnection = workspace.ChildRemoved:Connect(function(child)
             if child.Name == "Step" and child:IsA("Model") then
                 -- Chequea si quedan Steps; si no, asume reinicio y limpia originales para reaplicar limpio
-                local remainingSteps = #workspace:GetChildrenNamed("Step")
+                local remainingSteps = 0
+                for _, obj in pairs(workspace:GetChildren()) do
+                    if obj.Name == "Step" and obj:IsA("Model") then
+                        remainingSteps = remainingSteps + 1
+                    end
+                end
                 if remainingSteps == 0 and glassEspEnabled then
                     originalTempered = {}  -- Limpia para que nuevos se apliquen frescos
                     print("Debug: Detectado reinicio de cristales. Limpiando originales para reaplicar ESP.")
@@ -142,15 +147,38 @@ else
             end
         end
 
-        -- Reset ESP
+        -- Reset ESP (Mejorado: Fuerza restauración recorriendo todos los steps actuales)
         local function resetGlassEsp()
+            -- Primero, itera sobre la tabla para restaurar si existen
             for part, props in pairs(originalTempered) do
                 if part and part:IsDescendantOf(workspace) then
                     part.Color = props.Color
                     part.Material = props.Material
                 end
             end
+
+            -- Luego, fuerza restauración en TODOS los glass_tempered actuales (por si hay no tracked)
+            for _, step in pairs(workspace:GetChildren()) do
+                if step.Name == "Step" and step:IsA("Model") then
+                    local glassTempered = step:FindFirstChild("glass_tempered")
+                    if glassTempered then
+                        for _, part in pairs(glassTempered:GetDescendants()) do
+                            if part:IsA("BasePart") or part:IsA("MeshPart") then
+                                if originalTempered[part] then
+                                    part.Color = originalTempered[part].Color
+                                    part.Material = originalTempered[part].Material
+                                else
+                                    -- Fuerza default si no guardado (asumiendo valores típicos para vidrio)
+                                    part.Color = Color3.fromRGB(255, 255, 255)  -- Blanco transparente
+                                    part.Material = Enum.Material.Glass
+                                end
+                            end
+                        end
+                    end
+                end
+            end
             originalTempered = {} -- Clear after reset
+            print("Debug: ESP reset forzado en todos los steps actuales.")
         end
 
         -- Toggle ESP
@@ -412,7 +440,7 @@ else
 
         TabMain:CreateSection("Correct All")
         TabMain:CreateButton({
-            Name = "Apply Correct All",
+            Name = "Apply Correct All (One-Shot)",
             Callback = applyCorrectAll
         })
 
